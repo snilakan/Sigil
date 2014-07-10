@@ -1,0 +1,20 @@
+K 10
+svn:ignore
+V 152
+*.stderr.diff
+*.stderr.out
+*.stdout.diff
+*.stdout.out
+.deps
+jm-insns
+lsw
+Makefile
+Makefile.in
+power6_bcmp
+power6_mf_gpr
+round
+std_reg_imm
+twi_tdi
+tw_td
+
+END

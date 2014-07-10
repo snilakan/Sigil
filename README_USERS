@@ -1,0 +1,66 @@
+Callgrind has been modified to capture the data transfer that occurs between functions in the user program. There is a struct for each function, that holds the cost associated with it. These structs are linked to one another to represent the calltree of the program. A struct forms a node in this calltree. There are multiple nodes for each function, based on the context of the call. Thus if a function is called in two different contexts, two separate nodes are created so that the cost for each context may be uniquely determined. 
+Be warned that this causes massive slowdown. While Valgrind takes 30x slowdown, this is more like 300x.
+
+***********************************************************
+Information provided by this tool:
+
+This tool will give you the following costs associated with each function (in every unique context):
+
+1. INSTRS: The number of instructions spent in the function.
+2. IPCOMM: The data (in bytes) taken by this function as input from other functions (data source functions). This information will be separated by values for each source function in each unique context.
+3. OPCOMM: The data (in bytes) sent as output by this function to other functions (data destination functions). This information will be separated by values for each source function in each unique context.
+4. IPCOMM_UNIQUE The same as 2., except when any byte of data is transferred more than once, it is counted only as a single byte transfer.
+5. OPCOMM_UNIQUE The same as 3., except when any byte of data is transferred more than once, it is counted only as a single byte transfer.
+
+The aim of capturing these metrics is to help determine which functions in an application should be accelerated in hardware. The number of INSTRUCTIONS in a function represent the actual work that is done by the function in terms of computation. The IPCOMM and OPCOMM metrics represent the work done in fetching data into the function from outside. In essence, a higher Computation/Communication ratio is indicative of a good candidate for hardware acceleration. H
+The justification for capturing 4 and 5 is as follows:
+While Computation/Communication is an important metric, an accelerator for a function would not incur the overhead of bringing data repeatedly from the outside world, as it will buffer fetched data and reuse it within the function. Metrics 4 and 5 capture the unique communication, to represent the actual amount of data (in bytes) that a function needs from the outside world to complete its task. Thus, a good accelerator will have a high Computation to Unique-Communication ratio.
+**********************************************************
+
+
+
+
+**********************************************************
+How do I run the tool?
+
+The tool can be found at /archgroup/archtools/Profilers/valgrind-3.7_modified/valgrind-3.7. It is invoked as follows:
+
+Navigate to the directory with the executable of the user program and execute the following: 
+
+/archgroup/archtools/Profilers/valgrind-3.7_modified/valgrind-3.7/vg-in-place --tool=callgrind --separate-callers=100 --mangle-names=no --toggle-collect=main --cache-sim=yes --dump-line=no <executable <executable arguments>>
+
+This produces an output file named CLG_drwtest in the folder where it was invoked. 
+
+A Python post processing script is available to run through the results and present them in a more readable format. This can be found at: /archgroup/archtools/Profilers/valgrind-3.7_modified/vgmod_postprocessing/aggregate_costs.py
+Invocation: /archgroup/archtools/Profilers/valgrind-3.7_modified/vgmod_postprocessing/aggregate_costs.py <inputfile> <printcallees?=yes|no> <percentofinst=0-100>
+The Python post-processing script currently prints inclusive costs of each function in each unique context, in a calltree fashion similar to callgrind itself.
+**********************************************************
+
+
+
+
+**********************************************************
+What programs can be profiled by the tool?
+
+As the tool incurs massive slowdown already, some restrictions were placed purposefully on the user program, so that writing optimized code would be somewhat easier and the memory behavior of the tool is more determinate.
+The restrictions are as follows (3/2/2012):
+
+1. Each function name must be unique across the application. The user program must not have overloaded functions.
+2. The maximum depth of the calltree in the user program (after main) must not exceed the <number> - 10, specified in --separate-callers=<number> while invoking the tool. The default for <number> specified earlier was 100, but it can simply be the maximum depth of the calltree in the user program + 10. The additional 10 is just a buffer for the functions before main() and after exit().
+3. The number of callees for each function in the user program should at most be 1000.
+4. The number of functions in the program must not exceed 10,000.
+
+Be warned, the slowdown is exponentially related the size of the user program and the data given as input to it.
+
+**********************************************************
+
+
+
+**********************************************************
+What are some assumptions about the profiled program and how much is the accuracy of this tool?
+
+1. The accuracy of the dependencies between calls is limited to the average dependencies between calls over the whole program.
+2. At the moment, for building the dependency list per call, it is assumed that during a call to a function if it reads addresses written by some other function, that function produced the address before this call to this function and after any previous calls to this function. If the user program violates this assumption, the accuracy is not guaranteed. Given Point 1., if we list a function as a dependency only if a unique byte is transferred would that still need this assumption, since we are summing up and averaging over the number of calls?
+
+
+*********************************************************

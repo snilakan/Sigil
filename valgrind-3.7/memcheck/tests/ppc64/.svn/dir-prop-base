@@ -1,0 +1,9 @@
+K 10
+svn:ignore
+V 41
+.deps
+power_ISA2_05
+Makefile
+Makefile.in
+
+END

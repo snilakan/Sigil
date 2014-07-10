@@ -1,0 +1,12 @@
+K 10
+svn:ignore
+V 74
+*.dSYM
+*.so
+.deps
+Makefile
+Makefile.in
+memcheck-*-darwin
+memcheck-*-linux
+
+END

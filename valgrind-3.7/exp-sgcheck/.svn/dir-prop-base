@@ -1,0 +1,17 @@
+K 10
+svn:ignore
+V 264
+*.dSYM
+.deps
+exp-sgcheck-*-darwin
+exp-sgcheck-*-linux
+Makefile
+Makefile.in
+preen_invars
+vgpreload_exp-ptrcheck-*-linux.so
+vgpreload_exp-ptrcheck-*-darwin.so
+vgpreload_exp-ptrcheck-*-darwin.so.dSYM
+vgpreload_exp-sgcheck-*-darwin.so
+vgpreload_exp-sgcheck-*-linux.so
+
+END

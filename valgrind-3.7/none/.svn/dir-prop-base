@@ -1,0 +1,11 @@
+K 10
+svn:ignore
+V 59
+*.so
+.deps
+Makefile
+Makefile.in
+none-*-darwin
+none-*-linux
+
+END

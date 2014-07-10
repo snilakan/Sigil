@@ -1,0 +1,20 @@
+K 10
+svn:ignore
+V 155
+*.diff
+*.dSYM
+*.out
+.deps
+bt_everything
+bug132146
+bug279698
+defcfaexpr
+fxsave-amd64
+int3-amd64
+Makefile
+Makefile.in
+more_x87_fp
+sse_memory
+xor-undef-amd64
+
+END

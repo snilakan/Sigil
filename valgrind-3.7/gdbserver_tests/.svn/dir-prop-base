@@ -1,0 +1,25 @@
+K 10
+svn:ignore
+V 186
+*.diff
+*.out
+.deps
+clean_after_fork
+detailed
+fork_chain
+gdb
+gdb.eval
+gdb.pic
+gdb.step
+main_pic
+Makefile
+Makefile.in
+passsigalrm
+progB.done
+sleepers
+t
+vgdb
+vgdb.ptraceinvoker
+watchpoints
+
+END

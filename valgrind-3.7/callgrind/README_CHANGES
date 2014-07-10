@@ -1,0 +1,18 @@
+Here are a list of changes from the original Callgrind in my program.- Sid
+
+1. The Makefile is changed with some additions to compile my code as well. These changes need to be propogated to both the noopt and opt Makefiles. The current Makefile is a modified version of the noopt version.
+2. sid.c and sid.h which have all the necessary data structures and code to instrument dataflow.
+3. sim.c, bbcc.c and main.c all have sid.h included at the top so as to include the right global variables and function in scope.
+4. sim.c is changed with the log_I/D functions to also have calls to storeDRWcontext and storeIcontext.
+5. main.c is changed to have calls in the post and pre functions of valgrind, to initialize some global variables needed for my instrumentation. Also added logging of events for operations.
+6. dump.c is changed TODO. NO CHANGES! dump.c does not include header sid.h even
+7. bbcc.c is changed. setup_bbcc is changed to add a bit of code to initialize some global variables that maintain a recent call history to be used during instrumentation of a basic block. Also added in thread initialization for a new thread
+8. Added .deps/callgrind_amd64_linux-sid.Po and .deps/callgrind_x86_linux-sid.Po so that dependencies are outlined clearly in the Make clause.
+9. global.h is changed to include some instrumentation to capture flops and iops. Also extended command line options data structure. Search on -> sid
+10. main.c Changes to incorporate tracking operations (flops and iops) by inserting helper functions log_ops and addevent_ops and making the appropriate changes in CLG_(instrument) and flushEvents.
+11. sim.c: Changed the way storeIcontext and storeDRWcontext is called so updated sim.c. Furthermore, added information for a new set of events names EG_OPS and initialized it.
+12. clo.c: Added new command line option to specify whether we treat threads as the producing and consuming entity or functions within those threads. Also added a command line option to specify the maximum recursion depth. Finally also added a command line option to specify whether to gather events.
+13. main.c: Also made changes to capture when fences are present in the code. This will be a type of instruction that uses barriers. We need to know if they exist. As long as we cover barriers and mutexes we should be ok.
+14. main.c: syscalltime changes
+
+- Sid

@@ -1,0 +1,13 @@
+K 10
+svn:ignore
+V 79
+*.dSYM
+*.so
+.deps
+Makefile
+Makefile.in
+massif-*-darwin
+massif-*-linux
+ms_print
+
+END
