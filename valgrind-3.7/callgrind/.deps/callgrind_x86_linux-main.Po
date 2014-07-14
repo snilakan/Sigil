@@ -12,7 +12,7 @@ callgrind_x86_linux-main.o: main.c ../config.h callgrind.h \
  ../VEX/pub/libvex_basictypes.h ../VEX/pub/libvex_ir.h \
  ../include/pub_tool_tooliface.h ../include/pub_tool_errormgr.h \
  ../include/pub_tool_execontext.h ../include/pub_tool_xarray.h \
- ../include/pub_tool_clientstate.h events.h costs.h sid.h \
+ ../include/pub_tool_clientstate.h events.h costs.h sigil.h \
  ../include/pub_tool_threadstate.h ../include/pub_tool_gdbserver.h \
  ../VEX/pub/libvex_ir.h ../cachegrind/cg_branchpred.c
 
@@ -76,7 +76,7 @@ events.h:
 
 costs.h:
 
-sid.h:
+sigil.h:
 
 ../include/pub_tool_threadstate.h:
 

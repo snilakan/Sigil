@@ -12,7 +12,7 @@ callgrind_amd64_linux-sim.o: sim.c global.h ../include/pub_tool_basics.h \
  ../VEX/pub/libvex_ir.h ../include/pub_tool_tooliface.h \
  ../include/pub_tool_errormgr.h ../include/pub_tool_execontext.h \
  ../include/pub_tool_xarray.h ../include/pub_tool_clientstate.h events.h \
- costs.h sid.h ../cachegrind/cg_arch.h
+ costs.h sigil.h ../cachegrind/cg_arch.h
 
 global.h:
 
@@ -68,6 +68,6 @@ events.h:
 
 costs.h:
 
-sid.h:
+sigil.h:
 
 ../cachegrind/cg_arch.h:

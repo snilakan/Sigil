@@ -63,7 +63,7 @@
 #include "config.h"
 #include "callgrind.h"
 #include "global.h"
-#include "sid.h"
+#include "sigil.h"
 
 #include "pub_tool_threadstate.h"
 #include "pub_tool_gdbserver.h"

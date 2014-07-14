@@ -33,7 +33,7 @@
 #include "pthread.h"
 #include "config.h"
 #include "global.h"
-#include "sid.h"
+#include "sigil.h"
 
 #include "pub_tool_threadstate.h"
 #include "pub_tool_libcfile.h"
@@ -94,8 +94,6 @@ SyscallInfo CLG_(syscall_info)[MAX_NUM_SYSCALLS];
 
 // Most distinct mem blocks read by a syscall is 5, I think;  10 should be safe
 // This array is null-terminated.
-ShW* CLG_(mem_reads_syscall)[MAX_READ_MEMS];
-UInt CLG_(mem_reads_n_syscall) = 0;
 Int  CLG_(current_syscall) = -1;
 Int  CLG_(current_syscall_tid) = -1;
 Addr CLG_(last_mem_write_addr) = INVALID_TEMPREG;
@@ -151,11 +149,11 @@ void file_err(void)
 void CLG_(init_funcarray)()
 {
   int i;
-  SM* sm_temp;
-  SM_event* sm_event_temp;
-  SM_datareuse* sm_datareuse_temp;
-  funcinst* funcinsttemp;
-  funcinfo* funcinfotemp;
+  SM* sm_temp = 0;
+  SM_event* sm_event_temp = 0;
+  SM_datareuse* sm_datareuse_temp = 0;
+  funcinst* funcinsttemp = 0;
+  funcinfo* funcinfotemp = 0;
   
   for(i = 0; i < MAX_THREADS; i++){
     CLG_(thread_globvars)[i] = 0;
@@ -475,6 +473,14 @@ static void* get_SM_for_writing(Addr ea)
   return *sm_p;
 }
 
+/* When a set of byte addresses are read (Load instruction), we want to establish a producer-consumer relationship by looking up the entity (potentially, entities) that wrote the addresses. (The entities are currently functions)
+   These helper functions determine the last writer for a particular address, by looking up the entry in the Shadow Memory.
+   The helper functions handle all possible cases. For example, when the range of addresses fall across multiple Secondary maps, a slightly slower function is used that retrieves the secondary map for each address in the range. 
+   There are separate functions for when events are turned on, and re-use analysis is turned on. 
+
+   For every producer function encountered by a function A who is reading produced data, function A's data structures need to be updated with the number of bytes read from that producer.
+   If there are different producers for different addresses in an address range for a request, the reading function's data structures are updated for each of every unique producer encountered.
+   This makes the logic employed by the helpers quite complicated. This is an area for improvement. Perhaps a two-pass approach might work? */
 static void get_last_writer_event_singlesm(Addr ea, void* sm_temp, int datasize, funcinfo *current_funcinfo_ptr, funcinst *current_funcinst_ptr, int tid){
   SM_event *sm = (SM_event*) sm_temp;
   funcinst *temp, *candidate;
@@ -483,9 +489,6 @@ static void get_last_writer_event_singlesm(Addr ea, void* sm_temp, int datasize,
   int i;
   ULong temp_rangefirst, temp_rangelast;
   ULong count_unique = 0, count_unique_event = 0;
-
-/*   if(CLG_(num_eventdumps) > 0) */
-/*     VG_(printf)("Moonj\n"); */
 
   //Unroll the loop once and use as a seed for the loop
   candidate_event = sm->last_writer_event[ea & 0xffff];
@@ -501,14 +504,10 @@ static void get_last_writer_event_singlesm(Addr ea, void* sm_temp, int datasize,
     sm->last_reader_event[ea & 0xffff] = CLG_(drwevent_latest_event);
   }
 
-/*   if(candidate_event){ */
-/*     if(candidate_event->type) */
-/*       candidate = candidate_event->consumer; */
-/*     else */
-/*       candidate = candidate_event->producer; */
-/*   } */
   temp_rangefirst = ea;
   temp_rangelast = temp_rangefirst;
+  // For entire address range, check the producer for every byte read.
+  // For every unique producer, call insert_to_consumedlist and update consuming function's data structures
   for(i = 1; i < datasize; i++){
     temp_event = sm->last_writer_event[(ea + i) & 0xffff];
     temp_event_dumpnum = sm->last_writer_event_dumpnum[(ea + i) & 0xffff];
@@ -756,16 +755,12 @@ static void get_last_writer_datareuse(Addr ea, int datasize, funcinfo *current_f
 
 static void check_align_and_get_last_writer(Addr ea, int datasize, funcinfo *current_funcinfo_ptr, funcinst *current_funcinst_ptr, int tid){
 
-/*   if(ea == 88473596) */
-/*     VG_(printf)("Encountered the address\n"); */
-
-//If we only want to calculate memory but not actually declare structures
+  //If we only want to calculate memory footprint of the shadow memory for debugging purposes
+  //The use of this option can potentially be avoided in favor of turning on drw-debug
   if(CLG_(clo).drw_calcmem){
     return;
   }
 
-//  SM *sm_start = (SM*) get_SM_for_reading(ea);
-//  SM *sm_end = (SM*) get_SM_for_reading(ea + datasize - 1);
   void *sm_start = get_SM_for_writing(ea);
   void *sm_end = get_SM_for_writing(ea + datasize - 1);
   if(!sm_start || !sm_end){
@@ -795,15 +790,25 @@ static void check_align_and_get_last_writer(Addr ea, int datasize, funcinfo *cur
   }
 }
 
+/* Helper functions to update the producer of an address/address range in the shadow memory.
+   There are separate functions for when event collection is turned on, and for when re-use analysis is activated as well
+   
+   We have commented out the 'traverse_and_remove_in_dependencelist', which traverses and remove the addresses in the 
+   current function's consumerlist. This call was intended to reset any record of data being consumed from this function through this address 
+   (while still maintaining total bytes consumed), as the address will get fresh data from this function.
+   As we discovered, this is a very expensive function call, done every time, for a rare case. The cose explodes when performing it on all individual addresses in the range.
+   Commenting out the call might skew the ratio of unique to non-unique as a consumer may be reading fresh data and believing its old data.
+   TODO: To improve accuracy, we might be better off storing the last X readers of a produced value in the shadow memory and checking only those.
+   TODO: Another design might be to maintain a linked list of consumers for a particular data element. This might also become prohibhitively expensive to store. 
+   TODO: Final option, store a list of producer-consumer transactions and list them out. Post-process them to figure out unique and non-unique
+*/
 static void put_writer_event(Addr ea, int datasize, funcinst *current_funcinst_ptr, int tid){
   SM_event *sm;
   int i = 0;
   funcinst *current_previous_writer, *temp;
   ULong temp_rangefirst, temp_rangelast;
-  //First traverse and remove the addresses in the current function's consumerlist
   /* traverse_and_remove_in_dependencelist(&current_funcinst_ptr->consumerlist, ea, datasize); */
-  //Then while overwriting, also determine the previous writer to a particular address and remove address chunks from its consumerlists
-  //Do this efficiently in chunks
+
   sm = (SM_event*) get_SM_for_writing(ea);
   current_previous_writer = sm->last_writer[ea & 0xffff];
   temp_rangefirst = ea;
@@ -819,17 +824,17 @@ static void put_writer_event(Addr ea, int datasize, funcinst *current_funcinst_p
     sm = (SM_event*) get_SM_for_writing(ea + i);
     temp = sm->last_writer[(ea + i) & 0xffff];
     if(temp != current_previous_writer){
-      //process whatever you have so far and reset temp_rangefirst and temp_rangelast
-      //Make sure current_previous_writer is not zero and not local because we have already traversed and removed current_funcinst_ptr
 /*       if(current_previous_writer && current_previous_writer != current_funcinst_ptr) */
 /* 	traverse_and_remove_in_dependencelist(&current_previous_writer->consumerlist, temp_rangefirst, temp_rangelast - temp_rangefirst + 1); */
+
+      //Make sure current_previous_writer is not zero and not local because we have already traversed and removed current_funcinst_ptr
       current_previous_writer = temp;
+      //process whatever you have so far and reset temp_rangefirst and temp_rangelast
       temp_rangefirst = ea + i;
       temp_rangelast = temp_rangefirst;
     }
     else
       temp_rangelast++;
-    //if(temp != current_funcinst_ptr){
     if(current_previous_writer != current_funcinst_ptr && sm->last_reader[(ea + i) & 0xffff]){
       sm->last_writer[(ea + i) & 0xffff] = current_funcinst_ptr;
       sm->last_writer_event[(ea + i) & 0xffff] = CLG_(drwevent_latest_event);
@@ -847,10 +852,8 @@ static void put_writer_event_singlesm(Addr ea, void *sm_temp, int datasize, func
   int i = 0;
   funcinst *current_previous_writer, *temp;
   ULong temp_rangefirst, temp_rangelast;
-  //First traverse and remove the addresses in the current function's consumerlist
 /*   traverse_and_remove_in_dependencelist(&current_funcinst_ptr->consumerlist, ea, datasize); */
-  //Then while overwriting, also determine the previous writer to a particular address and remove address chunks from its consumerlists
-  //Do this efficiently in chunks
+
   current_previous_writer = sm->last_writer[ea & 0xffff];
   temp_rangefirst = ea;
   temp_rangelast = temp_rangefirst;
@@ -864,17 +867,17 @@ static void put_writer_event_singlesm(Addr ea, void *sm_temp, int datasize, func
   for(i = 1; i < datasize; i++){
     temp = sm->last_writer[(ea + i) & 0xffff];
     if(temp != current_previous_writer){
-      //process whatever you have so far and reset temp_rangefirst and temp_rangelast
-      //Make sure current_previous_writer is not zero and not local because we have already traversed and removed current_funcinst_ptr
 /*       if(current_previous_writer && current_previous_writer != current_funcinst_ptr) */
 /* 	traverse_and_remove_in_dependencelist(&current_previous_writer->consumerlist, temp_rangefirst, temp_rangelast - temp_rangefirst + 1); */
+
+      //Make sure current_previous_writer is not zero and not local because we have already traversed and removed current_funcinst_ptr
       current_previous_writer = temp;
+      //process whatever you have so far and reset temp_rangefirst and temp_rangelast
       temp_rangefirst = ea + i;
       temp_rangelast = temp_rangefirst;
     }
     else
       temp_rangelast++;
-    //if(temp != current_funcinst_ptr){
     if(current_previous_writer != current_funcinst_ptr && sm->last_reader[(ea + i) & 0xffff]){
       sm->last_writer[(ea + i) & 0xffff] = current_funcinst_ptr;
       sm->last_writer_event[(ea + i) & 0xffff] = CLG_(drwevent_latest_event);
@@ -892,10 +895,8 @@ static void put_writer(Addr ea, int datasize, funcinst *current_funcinst_ptr, in
   int i = 0;
   funcinst *current_previous_writer, *temp;
   ULong temp_rangefirst, temp_rangelast;
-  //First traverse and remove the addresses in the current function's consumerlist
 /*   traverse_and_remove_in_dependencelist(&current_funcinst_ptr->consumerlist, ea, datasize); */
-  //Then while overwriting, also determine the previous writer to a particular address and remove address chunks from its consumerlists
-  //Do this efficiently in chunks
+
   sm = (SM*) get_SM_for_writing(ea);
   current_previous_writer = sm->last_writer[ea & 0xffff];
   temp_rangefirst = ea;
@@ -908,17 +909,17 @@ static void put_writer(Addr ea, int datasize, funcinst *current_funcinst_ptr, in
     sm = (SM*) get_SM_for_writing(ea + i);
     temp = sm->last_writer[(ea + i) & 0xffff];
     if(temp != current_previous_writer){
-      //process whatever you have so far and reset temp_rangefirst and temp_rangelast
-      //Make sure current_previous_writer is not zero and not local because we have already traversed and removed current_funcinst_ptr
 /*       if(current_previous_writer && current_previous_writer != current_funcinst_ptr) */
 /* 	traverse_and_remove_in_dependencelist(&current_previous_writer->consumerlist, temp_rangefirst, temp_rangelast - temp_rangefirst + 1); */
+
+      //Make sure current_previous_writer is not zero and not local because we have already traversed and removed current_funcinst_ptr
       current_previous_writer = temp;
+      //process whatever you have so far and reset temp_rangefirst and temp_rangelast
       temp_rangefirst = ea + i;
       temp_rangelast = temp_rangefirst;
     }
     else
       temp_rangelast++;
-    //if(temp != current_funcinst_ptr){
     if(current_previous_writer != current_funcinst_ptr && sm->last_reader[(ea + i) & 0xffff]){
       sm->last_writer[(ea + i) & 0xffff] = current_funcinst_ptr;
       sm->last_reader[(ea + i) & 0xffff] = 0;
@@ -933,10 +934,8 @@ static void put_writer_singlesm(Addr ea, void *sm_temp, int datasize, funcinst *
   int i = 0;
   funcinst *current_previous_writer, *temp;
   ULong temp_rangefirst, temp_rangelast;
-  //First traverse and remove the addresses in the current function's consumerlist
 /*   traverse_and_remove_in_dependencelist(&current_funcinst_ptr->consumerlist, ea, datasize); */
-  //Then while overwriting, also determine the previous writer to a particular address and remove address chunks from its consumerlists
-  //Do this efficiently in chunks
+
   current_previous_writer = sm->last_writer[ea & 0xffff];
   temp_rangefirst = ea;
   temp_rangelast = temp_rangefirst;
@@ -947,17 +946,17 @@ static void put_writer_singlesm(Addr ea, void *sm_temp, int datasize, funcinst *
   for(i = 1; i < datasize; i++){
     temp = sm->last_writer[(ea + i) & 0xffff];
     if(temp != current_previous_writer){
-      //process whatever you have so far and reset temp_rangefirst and temp_rangelast
-      //Make sure current_previous_writer is not zero and not local because we have already traversed and removed current_funcinst_ptr
 /*       if(current_previous_writer && current_previous_writer != current_funcinst_ptr) */
 /* 	traverse_and_remove_in_dependencelist(&current_previous_writer->consumerlist, temp_rangefirst, temp_rangelast - temp_rangefirst + 1); */
+
+      //Make sure current_previous_writer is not zero and not local because we have already traversed and removed current_funcinst_ptr
       current_previous_writer = temp;
+      //process whatever you have so far and reset temp_rangefirst and temp_rangelast
       temp_rangefirst = ea + i;
       temp_rangelast = temp_rangefirst;
     }
     else
       temp_rangelast++;
-    //if(temp != current_funcinst_ptr){
     if(current_previous_writer != current_funcinst_ptr && sm->last_reader[(ea + i) & 0xffff]){
       sm->last_writer[(ea + i) & 0xffff] = current_funcinst_ptr;
       sm->last_reader[(ea + i) & 0xffff] = 0;
@@ -984,10 +983,8 @@ static void put_writer_datareuse(Addr ea, int datasize, funcinst *current_funcin
 
 static void check_align_and_put_writer(Addr ea, int datasize, funcinst *current_funcinst_ptr, int tid){
 
-/*   if(ea == 88473596) */
-/*     VG_(printf)("Encountered the address\n"); */
-
-//If we only want to calculate memory but not actually declare structures
+  //If we only want to calculate memory footprint of the Shadow Memory but not actually declare structures and evaluate the logic
+  //The use of this option can potentially be avoided in favor of turning on drw-debug
   if(CLG_(clo).drw_calcmem){
     checkAddrValid( ea );
     void **sm_temp, **sm_start = &PM[ea >> SM_bits], **sm_end = &PM[(ea + datasize - 1) >> SM_bits]; // bits [31..SM_bits]
@@ -1005,8 +1002,6 @@ static void check_align_and_put_writer(Addr ea, int datasize, funcinst *current_
 
   void *sm_start = get_SM_for_writing(ea);
   void *sm_end = get_SM_for_writing(ea + datasize - 1);
-  //SM *sm_start = (SM*) get_SM_for_reading(ea);
-  //SM *sm_end = (SM*) get_SM_for_reading(ea + datasize - 1);
 
   if(sm_start != sm_end){
     if(CLG_(clo).drw_events)
@@ -1026,6 +1021,8 @@ static void check_align_and_put_writer(Addr ea, int datasize, funcinst *current_
   }
 }
 
+/* Helper functions to handle creation and manipulation of data structures to 
+	hold information for client functions called from every unique context */
 static funcinst* create_funcinstlist (funcinst* caller, int fn_num, int tid){
 
   int k; funcinst *funcinsttemp;
@@ -1039,7 +1036,7 @@ static funcinst* create_funcinstlist (funcinst* caller, int fn_num, int tid){
   CLG_(num_funcinsts)++;
   if(funcinsttemp == 0)
     handle_memory_overflow();
-  //1b. Similar to constructor, lets put all the initialization inst for funcinst right here
+  //1b. Similar to constructor, initialize all member variables for funcinst right here
   funcinsttemp->fn_number = fn_num;
   funcinsttemp->tid = tid;
   funcinsttemp->function_info = funcinfotemp; //Store pointer to central info store of function
@@ -1075,13 +1072,6 @@ static funcinst* create_funcinstlist (funcinst* caller, int fn_num, int tid){
   funcinsttemp->callee_prnt_idx = 0;
   CLG_(num_callee_array_elements) += NUM_CALLEES;
   if(funcinfotemp != 0){
-    //    funcinsttemp->funcinst_list_next = funcinfotemp->funcinst_list;
-    //    funcinsttemp->funcinst_list_prev = 0;
-
-    //    if(funcinfotemp->funcinst_list != 0)
-    //      funcinfotemp->funcinst_list->funcinst_list_prev = funcinsttemp;
-    //    funcinfotemp->funcinst_list = funcinsttemp;
-
     funcinsttemp->funcinst_number = funcinfotemp->number_of_funcinsts;
     funcinfotemp->number_of_funcinsts++;
   }
@@ -1091,12 +1081,8 @@ static funcinst* create_funcinstlist (funcinst* caller, int fn_num, int tid){
     //    funcinsttemp->funcinst_list_prev = 0;
   }
 
-  //These are not used as a central list is used instead
-  //funcinsttemp->latest_event = 0;
-  //funcinsttemp->drw_eventlist_start = 0;
-  //funcinsttemp->drw_eventlist_end = 0;
   funcinsttemp->num_events = 0;
-  //Only do this if we are running threads. If we run function and events, do not do this
+  //Only do this if we are running threads and events. If we run function and events, do not do this
   if(!CLG_(clo).drw_thread_or_func){
     /***1. CREATE THE NECESSARY FILE***/
     if(CLG_(clo).drw_events){
@@ -1113,14 +1099,6 @@ static funcinst* create_funcinstlist (funcinst* caller, int fn_num, int tid){
       
       funcinsttemp->res = res;
       funcinsttemp->fd = (Int) sr_Res(res);
-/*       VG_(sprintf)(buf, "%s,%s,%s,%s,%s # %s,%s,%s\nOR\n", "EVENT_NUM", "PRODUCER", "CONSUMER", "BYTES", "BYTES_UNIQ","TID","EVENT_NUM","SHARED_BYTES" ); */
-/*       VG_(write)(funcinsttemp->fd, (void*)buf, VG_(strlen)(buf)); */
-/*       VG_(sprintf)(buf, "%s,%s,%s,%s,%s,%s,%s,%s $ %s,%s,%s,%s,%s\n\n", "EVENT_NUM", "TID", "IOPS", "FLOPS", "LOC", "LOC_UNIQ", "MEM READS", "MEM WRITES", "TID","EVENT_NUM","RANGEFIRST","RANGELAST","SHARED_BYTES_UNIQ" ); */
-/*       VG_(write)(funcinsttemp->fd, (void*)buf, VG_(strlen)(buf)); */
-      
-      /*   VG_(sprintf)(buf, "%5s %15s %20s %20s %15s %15s %15s\n\n", "TID", "TYPE", "PRODUCER", "CONSUMER", "BYTES", "IOPS", "FLOPS"); */
-      /*   //  my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file */
-      /*   VG_(write)(funcinsttemp->fd, (void*)buf, VG_(strlen)(buf)); */
     }
     /***1. DONE CREATION***/
   }
@@ -1178,13 +1156,12 @@ static int search_funcinstlist (funcinst** funcinstoriginal, Context* func_cxt, 
 }
 
 /***
+ * Sigil requires full calling contexts to function correctly and identify which function instance node to update.
  * Search the list to see if the context is present in the list
  * If it is present, returns 1, otherwise insert and return 0
+ * Currently we are not using the return value, though original versions used the return value under certain conditions
  */
 static int insert_to_funcinstlist (funcinst** funcinstoriginal, Context* func_cxt, int cxt_size, funcinst** refarg, int tid, Bool full_context){
-
-
-  //funcinst *funcinstpointer = *funcinstoriginal;
   funcinst *funcinsttemp, *current_funcinst_ptr; //funcinstpointer is not used since we have an easy way of indexing the functioninsts via a fixed size array
   int i, j, ilimit, temp_cxt_num, entire_context_found = 1, foundflag = 0, contextcache_missflag = 0;
   drwglobvars *thread_globvar = CLG_(thread_globvars)[tid];
@@ -1205,15 +1182,16 @@ static int insert_to_funcinstlist (funcinst** funcinstoriginal, Context* func_cx
   if(!full_context)
     contextcache_missflag = 1;
 
-  //Here we need to check if the context specified is in full or not.
+  /*Here we need to check if the context specified is in full or not. 
+	Currently this limitation in the use of Sigil can cause benchmarks with 
+	very large number of functions called from different contexts to have issues.*/
   if(func_cxt->fn[cxt_size - 1]->number == ((*funcinstoriginal)->fn_number)){ //Check if the top of the context is also the topmost function in the funcinst list. If its not, then the list is not full.
     current_funcinst_ptr = *funcinstoriginal;
     ilimit = cxt_size - 1;
-    //ilimit = cxt_size - 1;
     //Before going over the entire context first do the topmost function.
-    //if(func_cxt->fn[cxt_size - 1]->number == current_funcinst_ptr->fn_number) //This is the same as the other if, so must be true within that if
-      ilimit--;
-      //Check if cache has the appropriate first entry. We have a redundant check for cxt_size here as the sizes can be never be equal if the fn_numbers corresponding cxt_sizes are not equal
+    ilimit--;
+    // Check if cache has the appropriate first entry. 
+	// We have a redundant check for cxt_size here as the sizes can be never be equal if the fn_numbers corresponding cxt_sizes are not equal
     if(full_context)
       if((cxt_size != current_funcinfo_ptr->context_size) || (current_funcinfo_ptr->context[cxt_size - 1].fn_number != func_cxt->fn[cxt_size - 1]->number)){//Cache context size does not match. Set the flag and initialize
 	current_funcinfo_ptr->context[cxt_size - 1].fn_number = func_cxt->fn[cxt_size - 1]->number;
@@ -1223,13 +1201,14 @@ static int insert_to_funcinstlist (funcinst** funcinstoriginal, Context* func_cx
       }
   }
   else{ //Not handled at the moment
-    //func_num1 = func_cxt->fn[cxt_size - 1]->number;
+    VG_(printf)("\nPartial context not yet supported. Please increase the number of --separate-callers option when invoking callgrind\n");
+    tl_assert(0);
+	// Beginnings of an alternate approach given below
+	//func_num1 = func_cxt->fn[cxt_size - 1]->number;
     //func_num2 = thread_globvar->funcinst_first;
     //Traverse from funcnum2 down and find the first instance of func_num1
     //If found, set the current_funcinst_ptr to that guy and ilimit to cxt_size - 2.
     //If not found, set the current_funcinst_ptr to funcinst_first and ilimit to cxt_size - 2.
-    VG_(printf)("\nPartial context not yet supported. Please increase the number of --separate-callers option when invoking callgrind\n");
-    tl_assert(0);
   }
 
   for(i = ilimit; i >= 0; i--){ //Traverse the list of the context of the current function, knowing that it starts from the first ever function.
@@ -1328,6 +1307,9 @@ static int insert_to_funcnodelist (funcinfo **funcinfooriginal, int func_num, fu
   return 0;
 }
 
+/*  Sigil used to maintain a linked list of address ranges that were produced/consumed for each function instance.
+    This was later changed to a technique where chunks of arrays are allocated on demand and linked together. 
+	Thus, the following two insert and remove functions are no longer in use. */
 static int insert_to_addrchunklist(addrchunk** chunkoriginal, Addr ea, Int datasize, ULong* refarg, int produced_list_flag, funcinst *current_funcinst_ptr) {
   addrchunk *chunk = *chunkoriginal; // chunk points to the first element of addrchunk array.
   addrchunknode *chunknodetemp = 0, *chunknodecurr = 0, *next_chunk = 0;
@@ -1706,6 +1688,8 @@ static int remove_from_addrchunklist(addrchunk** chunkoriginal, Addr ea, Int dat
 /***
  * Horizontally traverse the list and removes the address range
  * Returns nothing
+ * Currently not in use as this search and update on every address is too expensive. 
+ * A simpler solution with mild tradeoff in accuracy was made. See the "get_last_writer" functions.
  */
 static void traverse_and_remove_in_dependencelist (dependencelist_elemt** chunkoriginal, Addr ea, Int datasize){
   dependencelist_elemt *chunk = *chunkoriginal;
@@ -1718,13 +1702,13 @@ static void traverse_and_remove_in_dependencelist (dependencelist_elemt** chunko
 }
 
 /***
- * Given a funcinst, this function will check if any part of the address range passed in, is produced by the funcinst
+ * Given a funcinst structure, this function will check if any part of the address range passed in, is produced by the funcinst structure
  * Returns void
  */
 static __inline__
 dependencelist_elemt* insert_to_dependencelist(funcinst *current_funcinst_ptr, funcinst *consumed_fn){
   dependencelist *temp_list; int temp_funcinst_number, temp_fn_number, temp_tid;
-  int i, found_in_list_flag = 0; dependencelist_elemt *return_list_elemt;
+  int i, found_in_list_flag = 0; dependencelist_elemt *return_list_elemt = 0;
   funcinst *funcinsttemp = consumed_fn;
 
   if(consumed_fn){
@@ -1792,6 +1776,8 @@ dependencelist_elemt* insert_to_dependencelist(funcinst *current_funcinst_ptr, f
 }
 
 /***
+ * The mext few functions help generate and store re-use data for the histograms printed at the output.
+ * There is basic data collection for local and input histograms that have data for the local and input classes of commnication respectively.
  * Given a histlist and value, this function will check if the value exists in one of the static ranges and will then insert it
  * Returns void WE HAVE NOT YET IMPLEMENTED DEALLOCATION
  */
@@ -1906,7 +1892,7 @@ void insert_to_histlist(hist_list_elemt **histogram, ULong reuse_length, ULong r
 }
 
 /***
- * Given a histlist and value, this function will check if the value exists in one of the static ranges and will then insert it
+ * Given a reusecountlist and value, this function will check if the value exists in one of the static ranges and will then insert it
  * Returns void WE HAVE NOT YET IMPLEMENTED DEALLOCATION
  */
 static __inline__
@@ -1925,7 +1911,7 @@ void insert_to_reusecountlist(hist_list_elemt **histogram, UInt reuse_count, UIn
     tl_assert(reuse_count_old <= reuse_count);
   }
 
-  //0. Calculate range with bin size 1000
+  //0. Calculate range with bin size. This can be changed in the .h file
   range_first_old = reuse_count_old/HISTOGRAM_REUSECOUNT_BIN_SIZE * HISTOGRAM_REUSECOUNT_BIN_SIZE;
   range_last_old = range_first_old + HISTOGRAM_REUSECOUNT_BIN_SIZE - 1;
   range_first = reuse_count/HISTOGRAM_REUSECOUNT_BIN_SIZE * HISTOGRAM_REUSECOUNT_BIN_SIZE;
@@ -2043,32 +2029,26 @@ void print_histlist(hist_list_elemt *histogram){
 }
 
 /***
- * Given a funcinst, this function will check if any part of the address range passed in, is produced by the funcinst
+ * This function is given the producer and consumer function of an address/range of addresses.
+ * It is also given the number of bytes which were read uniquely. 
+ * Previous versions of the function used to determine the number of unique bytes read, with the help of a search.
+ * Since we started using last reader mechanisms in the Shadow Memory, the search has been eliminated.
+ * It then determines whether the consuming function is listed as a consumer in the producer's data structures and how many bytes were consumed.
  * Returns void
  */
 static __inline__
 void insert_to_consumedlist (funcinst *current_funcinst_ptr, funcinst *consumed_fn, drwevent *consumed_event, Addr ea, Int datasize, ULong count_unique, ULong count_unique_event){
   dependencelist_elemt *consumedfunc;
 
-  //found! Search the current function's consumedlist for the name/number of the function, create if necessary and add the address to that list
-  //insert_to_consumedfunclist(&current_funcinst_ptr->consumedlist, consumed_fn, current_funcinst_ptr, &consumedfunc);
   consumedfunc = insert_to_dependencelist(current_funcinst_ptr, consumed_fn);
-
-  //OLDCODE: No need for insert_to_addrchunklist since we started using last_reader mechanisms
-  //ULong leftcount;
-  //  insert_to_addrchunklist(&consumedfunc->consumedlist, ea, datasize, &leftcount, 0, current_funcinst_ptr);
-
   //Increment count in consumedfunclist and funcinfo
   consumedfunc->count += datasize;
-  //consumedfunc->count_unique += leftcount;
   consumedfunc->count_unique += count_unique;
   if(consumed_fn == current_funcinst_ptr)
-    //insert_to_drweventlist(0, 1, consumed_fn, 0, datasize, leftcount);
     insert_to_drweventlist(0, 1, consumed_fn, 0, datasize, count_unique);
   //SELF means consumed_fn == funcinstpointer. NO_PROD or NO_CONS means that consumed_fn == 0
   if((consumed_fn != current_funcinst_ptr) && (consumed_fn != 0)){
     current_funcinst_ptr->ip_comm += datasize;
-    //current_funcinst_ptr->ip_comm_unique += leftcount;
     current_funcinst_ptr->ip_comm_unique += count_unique;
 
     if(CLG_(clo).drw_events){
@@ -2086,12 +2066,13 @@ void insert_to_consumedlist (funcinst *current_funcinst_ptr, funcinst *consumed_
 }
 
 //This function is a bad way of getting the histogram. There will be too many accesses to the histogram thing for each funcinst
+/* This function does the same as the above but is used when data-reuse is activated.  
+ * Currently, data-reuse and event collection cannot be turned on at the same time as that would be too memory intensive, 
+ * so there is no event related logic in this function at all
+*/
 static __inline__
 void insert_to_consumedlist_datareuse (funcinst *current_funcinst_ptr, funcinst *consumed_fn, Addr ea, Int datasize, ULong count_unique, ULong reuse_length, ULong reuse_length_old, UInt reuse_count, UInt reuse_count_old){
   dependencelist_elemt *consumedfunc;
-
-  //if (reuse_length > 0 || reuse_length_old > 0)
-  //VG_(printf)("Greater than zero found!\n");
 
   if((reuse_length_old | reuse_length) && count_unique){
     VG_(printf)("Both reuse length and count_unique are non-zero!\n");
@@ -2102,50 +2083,39 @@ void insert_to_consumedlist_datareuse (funcinst *current_funcinst_ptr, funcinst 
   consumedfunc = insert_to_dependencelist(current_funcinst_ptr, consumed_fn);
   //Increment count in consumedfunclist and funcinfo
   consumedfunc->count += datasize;
-  //consumedfunc->count_unique += leftcount;
   consumedfunc->count_unique += count_unique;
   if(consumed_fn == current_funcinst_ptr){
-    //if(reuse_length_old || reuse_length)
       insert_to_histlist(&current_funcinst_ptr->local_histogram, reuse_length, reuse_length_old, datasize);
       insert_to_reusecountlist(&current_funcinst_ptr->local_reuse_counts, reuse_count, reuse_count_old, datasize);
 
-/*     //First clear out previous histogram entry */
-/*     if(reuse_length_old) */
-/*       current_funcinst_ptr->local_histogram[reuse_length_old/HISTOGRAM_BIN_SIZE] -= datasize; */
-/*     //Second update current histogram entry */
-/*     if(reuse_length) */
-/*       current_funcinst_ptr->local_histogram[reuse_length/HISTOGRAM_BIN_SIZE] += datasize; */
   }
   //SELF means consumed_fn == funcinstpointer. NO_PROD or NO_CONS means that consumed_fn == 0
   else if((consumed_fn != current_funcinst_ptr) && (consumed_fn != 0)){
     //Update the central funcinst also
     current_funcinst_ptr->ip_comm += datasize;
     current_funcinst_ptr->ip_comm_unique += count_unique;
-    //if(reuse_length_old || reuse_length)
-      insert_to_histlist(&current_funcinst_ptr->input_histogram, reuse_length, reuse_length_old, datasize);
-      insert_to_reusecountlist(&current_funcinst_ptr->input_reuse_counts, reuse_count, reuse_count_old, datasize);
-/*     //First clear out previous histogram entry */
-/*     if(reuse_length_old) */
-/*       current_funcinst_ptr->input_histogram[reuse_length_old/HISTOGRAM_BIN_SIZE] -= datasize; */
-/*     //Second update current histogram entry */
-/*     if(reuse_length) */
-/*       current_funcinst_ptr->input_histogram[reuse_length/HISTOGRAM_BIN_SIZE] += datasize;   */  
+	insert_to_histlist(&current_funcinst_ptr->input_histogram, reuse_length, reuse_length_old, datasize);
+	insert_to_reusecountlist(&current_funcinst_ptr->input_reuse_counts, reuse_count, reuse_count_old, datasize);
   }
 }
 
-//This function will be called every time it is detected that control has moved to a new function. It will marshall
-//all the dependences seen in the function that just completed. If there are fancy jumps in between function calls,
-//it is still counted as a new call. The function that just completed (fnA) maintains a list of dependencies (functions it read from)
-//that it encountered when executing during that call. This is checked against the global history of functions to see
-//if it read from any functions that were called after some prior call to fnA. fnA's structure can be obtained from
-//thread_globvar->previous_funcinst as it just completed and we have entered some new function
-
+/* This function was originally called every time it is detected that control has moved to a new function. It will marshall
+*  all the dependences seen in the function that just completed. If there are fancy jumps in between function calls,
+*  it is still counted as a new call. The function that just completed (fnA) maintains a list of dependencies (functions it read from)
+*  that it encountered when executing during that call. This is checked against the global history of functions to see
+*  if it read from any functions that were called after some prior call to fnA. fnA's structure can be obtained from
+*  thread_globvar->previous_funcinst as it just completed and we have entered some new function 
+*  Currently most of the logic to trace dependencies through individual function calls has been deprecated and replaced
+*  in favor of capturing events and deal with dependences between individual function calls in post-processing
+*/
 static __inline__
 void handle_callreturn(funcinst *current_funcinst_ptr, funcinst *previous_funcinst_ptr, int call_return, int tid){ //call_return = 0 indicates a call, 1 indicates a return, 2 indicates a call and a return or a jump. Basically 2 is passed into this function when we don't know what could have happened exactly
 
   //1. Take fnA and compare global history with the dependency list of the call that just completed (of fnA)
-  //If previous call to A exists in the array, and still points to the old call, then we can start comparing from there with all the elements of the dependency list for the call that just completed
+  //If previous call to A exists in the array, and still points to the old call, then we can start comparing from 
+  //there with all the elements of the dependency list for the call that just completed
   //If the call that just completed to the previous funcinst was the first, then just check the whole list
+  //DELETED OLD CODE
 
   if(!call_return || call_return == 2){
     current_funcinst_ptr->current_call_instr_num = CLG_(total_instrs);
@@ -2153,6 +2123,11 @@ void handle_callreturn(funcinst *current_funcinst_ptr, funcinst *previous_funcin
   }
 }
 
+/* The next two helper functions create a 'fake' context and function node for the root of the 
+*  flattened trees captured by Sigil. 
+*  It is used for the new_mem_startup system call, which is the first function call in the client program.
+*  It is also used when function communication is not activated. ( which is the default setting: thread-level communication monitoring ).
+*/
 static __inline__ 
 fn_node* create_fake_fn_node(int tid)
 {
@@ -2215,7 +2190,6 @@ void CLG_(storeIDRWcontext) (InstrInfo* inode, int datasize, Addr ea, Bool WR, i
   fn_node* function;
   Context* cxt;
   int temp_num_splits = 1, temp_splits_rem = 0, temp_split_datasize = datasize, i = 0, temp_ea = ea;
-  //  int search_depth = 0;
 
   //Debug. Check if its break
 /*   if(CLG_(current_state).cxt->fn[0]->number == 5 && opsflag == 1){ */
@@ -2230,13 +2204,14 @@ void CLG_(storeIDRWcontext) (InstrInfo* inode, int datasize, Addr ea, Bool WR, i
   thread_globvar = CLG_(thread_globvars)[threadarrayindex];
   //As setup_bbcc has already made sure that whatever is accessed above is valid for the current thread we go ahead here
 
-//ULTRA HACK DEBUGTRACE TO COMPARE WITH GEM5. Remove after tracing those problems out, unless this information proves useful
+//DEBUGTRACE prints out every thread, function and request type/size for every LD/ST. 
+//Is used for internal debugging purposes
   if(CLG_(clo).drw_debugtrace){
 /*     //First check if this is a new function for this thread */
 /*     if(thread_globvar->previous_funcinst->fn_number != CLG_(current_state).cxt->fn[0]->number){ */
 /*       //Check if it is a call. If so, print it out */
 /*       if((thread_globvar->current_drwbbinfo.previous_bb->jmp[thread_globvar->current_drwbbinfo.previous_bb_jmpindex].jmpkind == jk_Call) && (thread_globvar->previous_funcinst->fn_number == CLG_(current_state).cxt->fn[1]->number)){ //Then check conditions */
-/* 	VG_(printf)("Call occurred around now to: %s\n", CLG_(current_state).cxt->fn[0]->name); */
+/* 	VG_(printf)("Call occurred to: %s\n", CLG_(current_state).cxt->fn[0]->name); */
 /*       } */
 /*     } */
     if(opsflag == 5)
@@ -2265,7 +2240,6 @@ void CLG_(storeIDRWcontext) (InstrInfo* inode, int datasize, Addr ea, Bool WR, i
     //Treat as write
     //insert_to_drweventlist(0, 2, current_funcinst_ptr, 0, datasize, 0);
     check_align_and_put_writer(ea, datasize, CLG_(syscall_globvars)->funcinst_first, STARTUP_FUNC);
-    //CLG_(put_in_last_write_cache)(datasize, ea, current_funcinst_ptr, threadarrayindex);
     CLG_(total_data_writes) += datasize; // 1;
     return;
   }
@@ -2290,7 +2264,7 @@ void CLG_(storeIDRWcontext) (InstrInfo* inode, int datasize, Addr ea, Bool WR, i
     //The real issue here is that this is not necessarily so as simply checking in storeIcontext and storeDRWcontext is not enough to ensure that a BB was not missed in between.
     //It is entirely possible that a return could trigger another return in the next immediate BB, which means neither storeIcontext and storeDRWcontext will be invoked. This
     //would further mean that the current funcinst is not necessarily the caller/callee of the current function. Also, it might be also good to check funcinst numbers. TODO: So there
-    //should be a clever way of checking the calltree without resorting to checking from the top. In the interest of time, we will jsut check from the top for now.
+    //should be a way of checking the calltree without resorting to checking with the fullcontext from the top. For now, we just check from the top.
     if(!insert_to_funcnodelist(&thread_globvar->funcinfo_first, funcarrayindex, &current_funcinfo_ptr, function, threadarrayindex)){
       
       if((thread_globvar->current_drwbbinfo.previous_bb == 0) || (thread_globvar->previous_funcinst == 0)){ //First check if pointers are valid
@@ -2305,12 +2279,9 @@ void CLG_(storeIDRWcontext) (InstrInfo* inode, int datasize, Addr ea, Bool WR, i
       handle_callreturn(current_funcinst_ptr, thread_globvar->previous_funcinst, 0, threadarrayindex);//For a call or the first time a function is seen!
     }
     else if(thread_globvar->previous_funcinst->fn_number != funcarrayindex){
-      //else if(CLG_(current_cxt) != CLG_(current_state).bbcc->bb->jmpkind){
-      //Check if the context has changed (above statement). Track context with CLG_(current_cxt)
-      //Then do the same things in whatever is in the if statement. Thus this could be merged with the if statement and the following else condition can be removed.
-      
-      //Ignore the above 3 comments if there are any. The first step here is to figure out if the change in function was caused by a call or return. If it is caused by return or call, then we can easily just add or remove the funcinst.
-      //If it is not a call or return which caused this, then we need to trace the entire function context just like in the if statement.
+      // The first step here is to figure out if the change in function was caused by a call or return. 
+	  // If it is caused by return or call, then we can easily just add or remove the funcinst.
+      // If it is not a call or return which caused this, then we need to trace the entire function context just like in the if statement.
       
       if((thread_globvar->current_drwbbinfo.previous_bb->jmp[thread_globvar->current_drwbbinfo.previous_bb_jmpindex].jmpkind == jk_Call) && (thread_globvar->previous_funcinst->fn_number == CLG_(current_state).cxt->fn[1]->number)){
 	insert_to_funcinstlist(&thread_globvar->previous_funcinst, CLG_(current_state).cxt, 2, &current_funcinst_ptr, threadarrayindex, 0); //Then search for the current function, inserting if necessary
@@ -2385,20 +2356,11 @@ void CLG_(storeIDRWcontext) (InstrInfo* inode, int datasize, Addr ea, Bool WR, i
       }
       for(i = 0; i < temp_num_splits; i++){
 	insert_to_drweventlist(0, 2, current_funcinst_ptr, 0, temp_split_datasize, 0);
-/* 	if(CLG_(debug_count_events) < 600000){ */
-/* 	  VG_(printf)("Addr: %lu Datasize: %lu Event_num: %lu\n",temp_ea, temp_split_datasize, CLG_(drwevent_latest_event)->event_num); */
-/* 	  CLG_(debug_count_events)++; */
-/* 	} */
 	temp_ea += temp_split_datasize;
       }
       if(temp_splits_rem)
 	insert_to_drweventlist(0, 2, current_funcinst_ptr, 0, temp_splits_rem, 0);
       
-      //insert_to_drweventlist(0, 2, current_funcinst_ptr, 0, datasize, 0);
-/*       if(CLG_(debug_count_events) < 5000){ */
-/* 	VG_(printf)("Addr: %lu Datasize: %lu Event_num: %lu\n",ea, datasize, CLG_(drwevent_latest_event)->event_num); */
-/* 	CLG_(debug_count_events)++; */
-/*       } */
       check_align_and_put_writer(ea, datasize, current_funcinst_ptr, threadarrayindex);
       //CLG_(put_in_last_write_cache)(datasize, ea, current_funcinst_ptr, threadarrayindex);
       CLG_(total_data_writes) += datasize; // 1;
@@ -2425,83 +2387,6 @@ void CLG_(storeIDRWcontext) (InstrInfo* inode, int datasize, Addr ea, Bool WR, i
 /* Done with FUNCTIONS - inserted by Sid */
 
 /* FUNCTION CALLS ADDED TO PRINT ALL DATA ACCESSES FOR EVERY ADDRESS in LINKED LIST - Sid */
-
-/* static __inline__ */
-/* void dump_eventlist_to_file() */
-/* { */
-/*   //  int num_valid_threads = 0, i = 0; */
-/*   int j = 0; */
-/*   char buf[4096], drw_event_consumer[1024]; */
-/*   drweventlist* thread_list_temp; */
-/*   evt_addrchunknode *addrchunk_temp, *addrchunk_next; */
-/*   drwglobvars *thread_globvar; */
-
-/*   VG_(printf)("Printing events now\n"); */
-  
-/*   thread_list_temp = CLG_(drw_eventlist_start); */
-  
-/*   if(!thread_list_temp) */
-/*     return; */
-  
-/*   //Iterate over all chunks from start to end */
-/*   do{ */
-/*     //Iterate over all */
-/*     for(j = 0; j < thread_list_temp->size; j++){ */
-/*       //1. Print out the contents of the event */
-/*       if(thread_list_temp->list_chunk[j].consumer) */
-/* 	VG_(sprintf)(drw_event_consumer, "%s", thread_list_temp->list_chunk[j].consumer->function_info->function->name); */
-/*       else */
-/* 	VG_(sprintf)(drw_event_consumer, ""); */
-/*       //      VG_(sprintf)(buf, "%-5d %-15d %20s %20s %-15d %-15d %-15d\n", thread_list_temp->list_chunk[j].tid, thread_list_temp->list_chunk[j].type, thread_list_temp->list_chunk[j].producer->function_info->function->name, drw_event_consumer, thread_list_temp->list_chunk[j].bytes, thread_list_temp->list_chunk[j].iops, thread_list_temp->list_chunk[j].flops); */
-/*       if(!thread_list_temp->list_chunk[j].type){ */
-/* 	VG_(sprintf)(buf, "%lu,%d,%lu,%lu,%lu,%lu,%lu,%lu", thread_list_temp->list_chunk[j].event_num, thread_list_temp->list_chunk[j].producer->tid, thread_list_temp->list_chunk[j].iops, thread_list_temp->list_chunk[j].flops, thread_list_temp->list_chunk[j].non_unique_local, thread_list_temp->list_chunk[j].unique_local, thread_list_temp->list_chunk[j].total_mem_reads, thread_list_temp->list_chunk[j].total_mem_writes); */
-/* 	thread_globvar = CLG_(thread_globvars)[thread_list_temp->list_chunk[j].producer->tid]; */
-/*       } */
-/*       else{ */
-/* 	VG_(sprintf)(buf, "%lu,%d,%d,%lu,%lu", thread_list_temp->list_chunk[j].event_num, thread_list_temp->list_chunk[j].producer->tid, thread_list_temp->list_chunk[j].consumer->tid, thread_list_temp->list_chunk[j].bytes, thread_list_temp->list_chunk[j].bytes_unique); */
-/* 	thread_globvar = CLG_(thread_globvars)[thread_list_temp->list_chunk[j].consumer->tid]; */
-/*       } */
-
-/*       VG_(write)(thread_globvar->fd, (void*)buf, VG_(strlen)(buf)); */
-
-/*       //2. Print out the contents of the list of computation and communication events */
-/*       addrchunk_temp = thread_list_temp->list_chunk[j].list; */
-/*       while(addrchunk_temp){ */
-/* 	//Print out the dependences for this event in the same line */
-/* 	if(thread_list_temp->list_chunk[j].type) */
-/* 	  VG_(sprintf)(buf, " # %d %lu %lu %lu", addrchunk_temp->shared_read_tid, addrchunk_temp->shared_read_event_num, addrchunk_temp->rangefirst, addrchunk_temp->rangelast ); */
-/* 	else */
-/* 	  VG_(sprintf)(buf, " $ %d %lu %lu %lu", addrchunk_temp->shared_read_tid, addrchunk_temp->shared_read_event_num, addrchunk_temp->rangefirst, addrchunk_temp->rangelast ); */
-/* 	VG_(write)(thread_globvar->fd, (void*)buf, VG_(strlen)(buf)); */
-/* 	addrchunk_next = addrchunk_temp->next; */
-/* 	drw_free(addrchunk_temp, &CLG_(num_eventaddrchunk_nodes)); */
-/* 	addrchunk_temp = addrchunk_next; */
-/*       } */
-/*       thread_list_temp->list_chunk[j].list = 0; */
-/*       //Print out the dependences for this event in the same line */
-/*       VG_(sprintf)(buf, "\n" ); */
-/*       VG_(write)(thread_globvar->fd, (void*)buf, VG_(strlen)(buf)); */
-/*     } */
-/* /\*     if(thread_list_temp->prev) *\/ */
-/* /\*       VG_(free)(thread_list_temp->prev); *\/ */
-/*     thread_list_temp->size = 0; */
-/*     if(thread_list_temp == CLG_(drw_eventlist_end)) */
-/*       break; */
-/*     thread_list_temp = thread_list_temp->next; */
-/*   } while(1); */
-/*     //  } while(thread_list_temp);//while(thread_list_temp != CLG_(drw_eventlist_end)); */
-
-/* /\*   //Clean up the last CLG_(drweventlist_end) also *\/ */
-/* /\*   CLG_(drw_eventlist_end)->prev = CLG_(drw_eventlist_end)->size = CLG_(drw_eventlist_end)->next = 0; *\/ */
-/* /\*   CLG_(drw_eventlist_end)->size = 0;  *\/ */
-/* /\*   CLG_(drw_eventlist_start) = CLG_(drw_eventlist_end); *\/ */
-/* /\*   CLG_(tot_eventinfo_size) = sizeof(drweventlist); *\/ */
-
-/*   //Clean up the last CLG_(drweventlist_end) also */
-/*   CLG_(drw_eventlist_end) = CLG_(drw_eventlist_start); */
-/*   tl_assert(!CLG_(num_eventaddrchunk_nodes)); */
-/* } */
-
 
 /*The following are helper functions to buffer data to be written to file. 
 This will reduce the number of small writes to file invoked by VG_(write)
@@ -2536,6 +2421,7 @@ static void my_fwrite(Int fd, Char* buf, Int len)
     fwrite_pos += len;
 }
 
+/* Helper functions to print the output data*/
 void dump_eventlist_to_file_serialfunc()
 {
   char buf[4096];
@@ -2550,16 +2436,17 @@ void dump_eventlist_to_file_serialfunc()
     else
       VG_(sprintf)(buf, "o %llu,%d,%d,%d,%llu,%llu,%llu,%llu\n", event_list_temp->event_num, event_list_temp->producer->fn_number, event_list_temp->producer->funcinst_number, event_list_temp->producer_call_num, event_list_temp->iops, event_list_temp->flops, event_list_temp->non_unique_local, event_list_temp->unique_local);
 
-    //VG_(write)(CLG_(drw_funcserial_fd), (void*)buf, VG_(strlen)(buf));
     my_fwrite(CLG_(drw_funcserial_fd), (void*)buf, VG_(strlen)(buf));
     event_list_temp++;
   } while(event_list_temp != CLG_(drw_eventlist_end)); //Since drw_eventlist_end points to the next entry which has not yet been written, we must process all entries upto but not including drw_eventlist_end. The moment event_list_temp gets incremented and points to 'end', the loop will terminate as expected.
 }
 
+/* This function prints events data for the case when function-level profiling is not enabled. 
+*  Technically, this feature is not yet ready for prime-time, and should not really be used.
+*/
 static __inline__
 void dump_eventlist_to_file()
 {
-  //  int num_valid_threads = 0, i = 0;
   char buf[4096];
   drwevent* event_list_temp;
   evt_addrchunknode *addrchunk_temp, *addrchunk_next;
@@ -2570,13 +2457,6 @@ void dump_eventlist_to_file()
 
   do{
     //1. Print out the contents of the event
-    //char drw_event_consumer[1024];
-    //if(event_list_temp->consumer)
-    //VG_(sprintf)(drw_event_consumer, "%s", event_list_temp->consumer->function_info->function->name);
-    //else
-    //VG_(sprintf)(drw_event_consumer, "");
-    //VG_(sprintf)(buf, "%-5d %-15d %20s %20s %-15d %-15d %-15d\n", event_list_temp->tid, event_list_temp->type, event_list_temp->producer->function_info->function->name, drw_event_consumer, event_list_temp->bytes, event_list_temp->iops, event_list_temp->flops);
-   
     if(!event_list_temp->type){
       VG_(sprintf)(buf, "%llu,%d,%llu,%llu,%llu,%llu,%llu,%llu", event_list_temp->event_num, event_list_temp->producer->tid, event_list_temp->iops, event_list_temp->flops, event_list_temp->non_unique_local, event_list_temp->unique_local, event_list_temp->total_mem_reads, event_list_temp->total_mem_writes);
       thread_globvar = CLG_(thread_globvars)[event_list_temp->producer->tid];
@@ -2586,7 +2466,6 @@ void dump_eventlist_to_file()
       thread_globvar = CLG_(thread_globvars)[event_list_temp->consumer->tid];
     }
 
-    //VG_(write)(thread_globvar->previous_funcinst->fd, (void*)buf, VG_(strlen)(buf));
     my_fwrite(thread_globvar->previous_funcinst->fd, (void*)buf, VG_(strlen)(buf));
 
     if(CLG_(clo).drw_debug){
@@ -2595,7 +2474,6 @@ void dump_eventlist_to_file()
 	thread_globvar = CLG_(thread_globvars)[event_list_temp->producer->tid];
       else
 	thread_globvar = CLG_(thread_globvars)[event_list_temp->consumer->tid];
-      //VG_(write)(thread_globvar->previous_funcinst->fd, (void*)buf, VG_(strlen)(buf));
       my_fwrite(thread_globvar->previous_funcinst->fd, (void*)buf, VG_(strlen)(buf));
     }
     
@@ -2607,7 +2485,6 @@ void dump_eventlist_to_file()
 	VG_(sprintf)(buf, " # %d %llu %lu %lu", addrchunk_temp->shared_read_tid, addrchunk_temp->shared_read_event_num, addrchunk_temp->rangefirst, addrchunk_temp->rangelast );
       else
 	VG_(sprintf)(buf, " $ %d %llu %lu %lu", addrchunk_temp->shared_read_tid, addrchunk_temp->shared_read_event_num, addrchunk_temp->rangefirst, addrchunk_temp->rangelast );
-      //VG_(write)(thread_globvar->previous_funcinst->fd, (void*)buf, VG_(strlen)(buf));
       my_fwrite(thread_globvar->previous_funcinst->fd, (void*)buf, VG_(strlen)(buf));
       addrchunk_next = addrchunk_temp->next;
       drw_free(addrchunk_temp, &CLG_(num_eventaddrchunk_nodes));
@@ -2616,7 +2493,6 @@ void dump_eventlist_to_file()
     event_list_temp->list = 0;
     //Print out the dependences for this event in the same line
     VG_(sprintf)(buf, "\n" );
-    //VG_(write)(thread_globvar->previous_funcinst->fd, (void*)buf, VG_(strlen)(buf));
     my_fwrite(thread_globvar->previous_funcinst->fd, (void*)buf, VG_(strlen)(buf));
     event_list_temp++;
   } while(event_list_temp != CLG_(drw_eventlist_end)); //Since drw_eventlist_end points to the next entry which has not yet been written, we must process all entries upto but not including drw_eventlist_end. The moment event_list_temp gets incremented and points to 'end', the loop will terminate as expected.
@@ -2746,6 +2622,7 @@ static ULong aggregate_addrchunk_counts(addrchunk** chunkoriginal, ULong *refarg
   return count_unique;
 }
 
+/* Helper functions for printing data */
 static void print_for_funcinst (funcinst *funcinstpointer, int fd, char* caller, drwglobvars *thread_globvar){
   char drw_funcname[4096], buf[8192];
   int drw_funcnum, drw_funcinstnum, drw_tid;
@@ -2841,6 +2718,7 @@ static void print_for_funcinst (funcinst *funcinstpointer, int fd, char* caller,
   my_fwrite(fd, (void*)buf, VG_(strlen)(buf));
 }
 
+/*OLD way of printing the data through actual recursion*/
 /* static void print_recurse_data (funcinst *funcinstpointer, int fd, int depth, drwglobvars *thread_globvar){ //Depth indicates how many recursions have been done.  */
 /*   int j; */
 /*   char caller[3]; */
@@ -2853,6 +2731,7 @@ static void print_for_funcinst (funcinst *funcinstpointer, int fd, char* caller,
 /*     print_recurse_data(funcinstpointer->callees[j], fd, depth + 1, thread_globvar); */
 /* } */
 
+/*print data through iterative tree traversal*/
 static void print_recurse_data(funcinst *p, int fd, int depth, drwglobvars *thread_globvar){
   char caller[3];
   do
@@ -2900,6 +2779,7 @@ static void print_recurse_data(funcinst *p, int fd, int depth, drwglobvars *thre
 /*   } */
 /* } */
 
+/*print tree through iterative tree traversal*/
 static void print_recurse_tree(funcinst *p, int fd, int depth, drwglobvars *thread_globvar){
   char buf[2048];
   do
@@ -3013,12 +2893,10 @@ static void print_recurse_reusedata (funcinst *p, int fd, int depth, drwglobvars
 
 void CLG_(print_to_file) ()
 {
-
   char drw_filename[50], buf[4096];
   SysRes res;
   int i, fd, num_valid_threads = 0;
   drwglobvars* thread_globvar = 0;
-  //time_t t;
 
   VG_(printf)("PRINTING Sigil's output now\n");
   
@@ -3033,19 +2911,11 @@ void CLG_(print_to_file) ()
   if(CLG_(clo).drw_calcmem){
     VG_(printf)("SUMMARY: \n\n");
     VG_(printf)("Total Memory Reads(bytes): %-20llu Total Memory Writes(bytes): %-20llu Total Instrs: %-20llu Total Flops: %-20llu Iops: %-20llu\n\n",CLG_(total_data_reads), CLG_(total_data_writes), CLG_(total_instrs), CLG_(total_flops), CLG_(total_iops));
-/*     VG_(printf)("Num SMs: %-20lu Num funcinsts: %-20lu Memory for PM(bytes): %-20lu Size of SM: %-20lu Size of SM_event: %-20lu Size of funcinst: %-20lu\n\n",CLG_(num_sms), CLG_(num_funcinsts), sizeof(PM), sizeof(SM), sizeof(SM_event), sizeof(funcinst)); */
-/*     if(CLG_(clo).drw_events) */
-/*       CLG_(tot_memory_usage) = CLG_(num_sms) * sizeof(SM_event) + CLG_(num_funcinsts) * sizeof(funcinst) + sizeof(PM); */
-/*     else */
-/*       CLG_(tot_memory_usage) = CLG_(num_sms) * sizeof(SM) + CLG_(num_funcinsts) * sizeof(funcinst) + sizeof(PM); */
-/*     VG_(printf)("Memory for SM(bytes): %-20lu = %-20lu(Mb) Memory for SM_event(bytes): %-20lu = %-20lu(Mb) Memory for funcinsts(bytes): %-20lu = %-20lu(Mb)\n\n", CLG_(num_sms) * sizeof(SM), CLG_(num_sms) * sizeof(SM)/1024/1024, CLG_(num_sms) * sizeof(SM_event), CLG_(num_sms) * sizeof(SM_event)/1024/1024, CLG_(num_funcinsts) * sizeof(funcinst), CLG_(num_funcinsts) * sizeof(funcinst)/1024/1024); */
     print_debuginfo();
-    if(CLG_(clo).drw_calcmem)
-      return;
+    return;
   }
 
   //Perform printing for each thread separately
-
   for(i = 0; i < MAX_THREADS; i++){
     thread_globvar = CLG_(thread_globvars)[i];
     if(thread_globvar) num_valid_threads++;
@@ -3102,20 +2972,12 @@ void CLG_(print_to_file) ()
     //PRINT METADATA
     VG_(sprintf)(buf, "Tool: Sigil \nVersion: 1.0\n\n");
     my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file
-    //VG_(write)(fd, (void*)buf, VG_(strlen)(buf));
     
-/*     time(&t); */
-/*     VG_(sprintf)("Timestamp: %s",ctime(&t)); */
-/*     //  my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file */
-/*     VG_(write)(fd, (void*)buf, VG_(strlen)(buf)); */
-
     VG_(sprintf)(buf, "SUMMARY: \n\n");
     my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file
-    //VG_(write)(fd, (void*)buf, VG_(strlen)(buf));
 
     VG_(sprintf)(buf, "Total Memory Reads(bytes): %-20llu Total Memory Writes(bytes): %-20llu Total Instrs: %-20llu Total Flops: %-20llu Iops: %-20llu\n\n",CLG_(total_data_reads), CLG_(total_data_writes), CLG_(total_instrs), CLG_(total_flops), CLG_(total_iops));
     my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file
-    //VG_(write)(fd, (void*)buf, VG_(strlen)(buf));
     
     if(CLG_(clo).drw_events)
       CLG_(tot_memory_usage) = CLG_(num_sms) * sizeof(SM_event) + CLG_(num_funcinsts) * sizeof(funcinst) + sizeof(PM);
@@ -3123,32 +2985,29 @@ void CLG_(print_to_file) ()
       CLG_(tot_memory_usage) = CLG_(num_sms) * sizeof(SM) + CLG_(num_funcinsts) * sizeof(funcinst) + sizeof(PM);
     VG_(sprintf)(buf, "Num SMs: %-20llu Num funcinsts: %-20llu Memory for SM(bytes): %-20llu Memory for funcinsts(bytes): %-20llu Memory for PM(bytes): %-20d Total Memory Usage: %-20llu\n\n",CLG_(num_sms), CLG_(num_funcinsts), CLG_(num_sms) * sizeof(SM), CLG_(num_funcinsts) * sizeof(funcinst), (UInt) sizeof(PM), CLG_(tot_memory_usage));
     my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file
-    //VG_(write)(fd, (void*)buf, VG_(strlen)(buf));
 
     VG_(sprintf)(buf, "\n\nTREE DUMP\n\n");
     my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file
-    //VG_(write)(fd, (void*)buf, VG_(strlen)(buf));
     
     VG_(sprintf)(buf, "%s, %s, %s, %s\n", "FUNCTION NUMBER", "FUNC_INST NUM", "Children?", "Number of calls");
     my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file
-    //VG_(write)(fd, (void*)buf, VG_(strlen)(buf));
-    
+
+	/* Print the tree first. Post-processing will build the tree and then populate it with data*/
     print_recurse_tree(thread_globvar->funcinst_first, fd, 0, thread_globvar);
     
     VG_(sprintf)(buf, "\n\nEND TREE DUMP\n\n");
     my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file
-    //VG_(write)(fd, (void*)buf, VG_(strlen)(buf));
     
     VG_(sprintf)(buf, "\nDATA DUMP\n\n");
     my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file
-    //VG_(write)(fd, (void*)buf, VG_(strlen)(buf));
     
     VG_(sprintf)(buf, "%20s %20s %20s %50s %20s %20s %20s %20s %20s %20s %20s %20s\n\n\n","THREAD NUMBER", "FUNCTION NUMBER", "FUNC_INST NUM", "FUNCTION NAME", "PROD?", "INSTRS", "FLOPS", "IOPS", "IPCOMM_UNIQUE", "OPCOMM_UNIQUE", "IPCOMM", "OPCOMM");
     my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file
-    //VG_(write)(fd, (void*)buf, VG_(strlen)(buf));
     
+	/* Print the data for all functions. Post-processing will build the tree and then populate it with data */
     print_recurse_data(thread_globvar->funcinst_first, fd, 0, thread_globvar);
     
+	//Do a final flush to ensure print buffers are completely empty
     fwrite_flush();
     VG_(close)( (Int)sr_Res(res) );
     if (num_valid_threads == CLG_(num_threads))
@@ -3157,6 +3016,11 @@ void CLG_(print_to_file) ()
   VG_(printf)("Done printing Sigil's output now\n");
 }
 
+/***
+ * The following functions are helpers to insert and search for address ranges in event data structures.
+ * Event tracking is expensive in terms of storage and logic. The biggest lookup expense in these functions.
+ * If many disjoint address ranges are touched by an event, it can also lead to an explosion in storage
+*/
 static int insert_to_evtaddrchunklist(evt_addrchunknode** chunkoriginal, Addr range_first, Addr range_last, ULong* refarg, int shared_read_tid, ULong shared_read_event_num) {
 
   evt_addrchunknode *chunk = *chunkoriginal; // chunk points to the first element of addrchunk array.
@@ -3401,8 +3265,11 @@ static int search_evtaddrchunklist(evt_addrchunknode** chunkoriginal, Addr range
   return partially_found;
 }
 
-//FUNCTION CALLS TO INSTRUMENT THIGNS DURING SYSTEM CALLS
-
+//FUNCTION CALLS TO INSTRUMENT THINGS DURING SYSTEM CALLS
+/* Valgrind can intercept system calls and perform either pre or post-processing using the arguments to the call. 
+ * In the case of memory map requests, linux brk requests etc. Valgrind tells Sigil what address ranges are touched.
+ * Sigil is then able to use this information for establishing producer-consumer relationships across system calls as well.
+ */
 void CLG_(new_mem_startup) ( Addr start_a, SizeT len,
 			     Bool rr, Bool ww, Bool xx, ULong di_handle )
 {
@@ -3434,18 +3301,21 @@ void CLG_(new_mem_mmap) ( Addr a, SizeT len, Bool rr, Bool ww, Bool xx, ULong di
 {  
    // (Ignore permissions)
    // Make it look like any other syscall that outputs to memory
-   
+
+//DEBUG CODE   
 /*   CLG_(last_mem_write_addr) = a; */
 /*   CLG_(last_mem_write_len)  = len; */
   //VG_(printf)("=  new mmap mem: %x..%x, %d, function: %s\n", a, a+len,len, CLG_(current_state).cxt->fn[0]->name);
 /*   VG_(printf)("=  new mmap mem: rr = %s, ww = %s, xx = %s\n",rr ? "True" : "False", ww ? "True" : "False", xx ? "True" : "False"); */
+
   if(CLG_(clo).drw_syscall){
-    CLG_(storeIDRWcontext)( NULL, (UInt) len, a, 1, 2); //Put it down as a memory write for the current function
+    CLG_(storeIDRWcontext)( NULL, (UInt) len, a, 1, 2); //Put it down as a memory write for the current function for now
   }
 }
 
 void CLG_(new_mem_brk) ( Addr a, SizeT len, ThreadId tid )
 {
+	//DEBUG CODE
   //rx_new_mem("brk",  RX_(specials)[SpBrk], a, len, False);
   //  VG_(printf)("=  new brk mem: %x..%x, %d, function: %s\n", a, a+len,len, CLG_(current_state).cxt->fn[0]->name);
   //VG_(printf)("=  new brk mem: rr = %s, ww = %s, xx = %s\n",rr ? "True" : "False", ww ? "True" : "False", xx ? "True" : "False");
@@ -3462,6 +3332,7 @@ void rx_pre_mem_read_common(CorePart part, Bool is_asciiz, Addr a, UInt len)
   cxt = CLG_(current_state).cxt;
   if(CLG_(clo).drw_syscall){
     if(cxt){
+		//DEBUG CODE
       //VG_(printf)("=  pre mem read %s: %x..%x, %d, function: %s\n", is_asciiz ? "asciiz":"normal", a, a+len,len, cxt->fn[0]->name);
       //Insert into a temp array and pop when doing the syscall if a syscall is not already underway
       if(-1 == CLG_(current_syscall)){
@@ -3475,6 +3346,7 @@ void rx_pre_mem_read_common(CorePart part, Bool is_asciiz, Addr a, UInt len)
       }
     }
     else{
+	//DEBUG CODE
       //    VG_(printf)("=  pre mem read %s: %x..%x, %d, no function\n", is_asciiz ? "asciiz":"normal", a, a+len,len);
     }
   }
@@ -3487,7 +3359,6 @@ void CLG_(pre_mem_read_asciiz)(CorePart part, ThreadId tid, Char* s, Addr a)
    rx_pre_mem_read_common(part, /*is_asciiz*/True, a, len);
 }
 
-//void CLG_(pre_mem_read)(CorePart part, ThreadId tid, Char* s, Addr a, UInt len)
 void CLG_(pre_mem_read)(CorePart part, ThreadId tid, Char* s, Addr a, SizeT len)
 {
   rx_pre_mem_read_common(part, /*is_asciiz*/False, a, len);
@@ -3497,15 +3368,17 @@ void CLG_(pre_mem_write)(CorePart part, ThreadId tid, Char* s,
 			 //                             Addr a, UInt len)
                              Addr a, SizeT len)
 {
+	//DEBUG CODE
   //VG_(printf)("=  pre mem write: %x..%x, %d, function: %s\n", a, a+len,len, CLG_(current_state).cxt->fn[0]->name);
 }
 
-//I read somewhere that post functions are not called if the syscall fails or returns an errorl.
+//I read in the Valgrind documentation that post functions are not called if the syscall fails or returns an errorl.
 void CLG_(post_mem_write)(CorePart part, ThreadId tid,
 			     Addr a, SizeT len)
 {
    if (-1 != CLG_(current_syscall)) {
 
+   //DEBUG CODE
 /*       // AFAIK, no syscalls write more than one block of memory;  check this */
 /*       if (INVALID_TEMPREG != CLG_(last_mem_write_addr)) { */
 /*          VG_(printf)("sys# = %d\n", CLG_(current_syscall)); */
@@ -3521,58 +3394,3 @@ void CLG_(post_mem_write)(CorePart part, ThreadId tid,
      }
    }
 }
-
-//FUNCTION REPLACEMENT
-
-//First test
-
-/* #define PTH_FUNC(ret_ty, f, args...) \ */
-/*    ret_ty I_WRAP_SONAME_FNNAME_ZZ(VG_Z_LIBPTHREAD_SONAME,f)(args); \ */
-/*   ret_ty I_WRAP_SONAME_FNNAME_ZZ(VG_Z_LIBPTHREAD_SONAME,f)(args) */
-
-/* PTH_FUNC(int, pthreadZucreateZAZa, pthread_t *thread, const pthread_attr_t *attr, void *(*start) (void *), void *arg) { */
-/*   int    ret; */
-/*   OrigFn fn; */
-  
-/*   VALGRIND_GET_ORIG_FN(fn); */
-/*   VG_(printf)("Entered pthread_create\n"); */
-/*   CALL_FN_W_WWWW(ret, fn, thread,attr,start,arg); */
-/*   VG_(printf)("pthread_create returned: ret=%d",ret); */
-/*   return ret; */
-/* } */
-
-/* int I_WRAP_SONAME_FNNAME_ZZ(VG_Z_LIBPTHREAD_SONAME, pthreadZucreateZAZa) (pthread_t *thread, const pthread_attr_t *attr, void *(*start) (void *), void *arg) { */
-/* //int I_WRAP_SONAME_FNNAME_ZZ(VG_Z_LIBPTHREAD_SONAME, pthreadZucreateZAZa) (pthread_t* thread){ */
-/*   int    ret; */
-/*   OrigFn fn; */
-  
-/*   VALGRIND_GET_ORIG_FN(fn); */
-/*   VG_(printf)("Entered pthread_create\n"); */
-/*   //CALL_FN_W_WWWW(ret, fn, thread,attr,mythread_wrapper,&xargs[0]); */
-/*   VG_(printf)("pthread_create returned: ret=%d",ret); */
-/*   return ret; */
-/* } */
-
-/* Done with FUNCTION CALLS - inserted by Sid */
-
-
-/* //Added by Sid!! - Stack check functions */
-/* void * __stack_chk_guard = NULL; */
-/* void __stack_chk_guard_setup() */
-/* { */
-/*     unsigned char * p; */
-/*     p = (unsigned char *) &__stack_chk_guard; */
- 
-/*     /\* If you have the ability to generate random numbers in your kernel then use them, */
-/*        otherwise for 32-bit code: *\/ */
-/*     *p =  0x00000aff; */
-/* } */
-/* void __attribute__((noreturn)) __stack_chk_fail() */
-/* {  */
-/*     /\* put your panic function or similar in here *\/ */
-/*     unsigned char * vid = (unsigned char *)0xB8000; */
-/*     vid[1] = 7; */
-/*     for(;;) */
-/*     vid[0]++; */
-/* } */
-/* //Done additions by Sid */

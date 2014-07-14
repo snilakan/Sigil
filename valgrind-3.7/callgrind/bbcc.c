@@ -56,7 +56,7 @@
 */
 
 #include "global.h"
-#include "sid.h"
+#include "sigil.h"
 #include "costs.h"
 
 #include "pub_tool_threadstate.h"

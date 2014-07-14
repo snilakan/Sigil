@@ -79,7 +79,7 @@ am__objects_1 = callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-bb.$(OBJEXT) \
 	callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-jumps.$(OBJEXT) \
 	callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-main.$(OBJEXT) \
 	callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sim.$(OBJEXT) \
-	callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.$(OBJEXT) \
+	callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.$(OBJEXT) \
 	callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-threads.$(OBJEXT) \
 	callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-cg-arch.$(OBJEXT) \
 	callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-cg-x86-amd64.$(OBJEXT) \
@@ -93,7 +93,7 @@ callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_OBJECTS =  \
 am__callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_SOURCES_DIST = bb.c bbcc.c \
 	callstack.c clo.c context.c costs.c debug.c dump.c events.c \
 	fn.c jumps.c main.c sim.c threads.c ../cachegrind/cg-arch.c \
-	sid.c \
+	sigil.c \
 	../cachegrind/cg-x86-amd64.c ../cachegrind/cg-ppc32.c \
 	../cachegrind/cg-ppc64.c ../cachegrind/cg-arm.c \
 	../cachegrind/cg-s390x.c
@@ -110,7 +110,7 @@ am__objects_2 = callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-bb.$(OBJEXT) \
 	callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-jumps.$(OBJEXT) \
 	callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-main.$(OBJEXT) \
 	callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sim.$(OBJEXT) \
-	callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.$(OBJEXT) \
+	callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.$(OBJEXT) \
 	callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-threads.$(OBJEXT) \
 	callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-cg-arch.$(OBJEXT) \
 	callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-cg-x86-amd64.$(OBJEXT) \
@@ -633,7 +633,7 @@ bin_SCRIPTS = \
 noinst_HEADERS = \
 	costs.h \
 	events.h \
-	sid.h \
+	sigil.h \
 	global.h
 
 CALLGRIND_SOURCES_COMMON = \
@@ -650,7 +650,7 @@ CALLGRIND_SOURCES_COMMON = \
 	jumps.c \
 	main.c \
 	sim.c \
-	sid.c \
+	sigil.c \
 	threads.c \
 	../cachegrind/cg-arch.c \
 	../cachegrind/cg-x86-amd64.c \
@@ -801,7 +801,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-jumps.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-main.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sim.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-threads.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-bb.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-bbcc.Po@am__quote@
@@ -822,7 +822,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-jumps.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-main.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sim.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-threads.Po@am__quote@
 
 .c.o:
@@ -1021,19 +1021,19 @@ callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sim.obj: sim.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -c -o callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sim.obj `if test -f 'sim.c'; then $(CYGPATH_W) 'sim.c'; else $(CYGPATH_W) '$(srcdir)/sim.c'; fi`
 
-callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.o: sid.c
-@am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -MT callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.o -MD -MP -MF "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.Tpo" -c -o callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.o `test -f 'sid.c' || echo '$(srcdir)/'`sid.c; \
-@am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.Tpo" "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.Po"; else rm -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.Tpo"; exit 1; fi
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='sid.c' object='callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.o' libtool=no @AMDEPBACKSLASH@
+callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.o: sigil.c
+@am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -MT callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.o -MD -MP -MF "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.Tpo" -c -o callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.o `test -f 'sigil.c' || echo '$(srcdir)/'`sigil.c; \
+@am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.Tpo" "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.Po"; else rm -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.Tpo"; exit 1; fi
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='sigil.c' object='callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -c -o callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.o `test -f 'sid.c' || echo '$(srcdir)/'`sid.c
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -c -o callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.o `test -f 'sigil.c' || echo '$(srcdir)/'`sigil.c
 
-callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.obj: sid.c
-@am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -MT callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.obj -MD -MP -MF "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.Tpo" -c -o callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.obj `if test -f 'sid.c'; then $(CYGPATH_W) 'sid.c'; else $(CYGPATH_W) '$(srcdir)/sid.c'; fi`; \
-@am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.Tpo" "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.Po"; else rm -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.Tpo"; exit 1; fi
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='sid.c' object='callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.obj' libtool=no @AMDEPBACKSLASH@
+callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.obj: sigil.c
+@am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -MT callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.obj -MD -MP -MF "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.Tpo" -c -o callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.obj `if test -f 'sigil.c'; then $(CYGPATH_W) 'sigil.c'; else $(CYGPATH_W) '$(srcdir)/sigil.c'; fi`; \
+@am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.Tpo" "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.Po"; else rm -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.Tpo"; exit 1; fi
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='sigil.c' object='callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -c -o callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sid.obj `if test -f 'sid.c'; then $(CYGPATH_W) 'sid.c'; else $(CYGPATH_W) '$(srcdir)/sid.c'; fi`
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -c -o callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-sigil.obj `if test -f 'sigil.c'; then $(CYGPATH_W) 'sigil.c'; else $(CYGPATH_W) '$(srcdir)/sigil.c'; fi`
 
 callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-threads.o: threads.c
 @am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -MT callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-threads.o -MD -MP -MF "$(DEPDIR)/callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-threads.Tpo" -c -o callgrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@-threads.o `test -f 'threads.c' || echo '$(srcdir)/'`threads.c; \
@@ -1315,19 +1315,19 @@ callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sim.obj: sim.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -c -o callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sim.obj `if test -f 'sim.c'; then $(CYGPATH_W) 'sim.c'; else $(CYGPATH_W) '$(srcdir)/sim.c'; fi`
 
-callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.o: sid.c
-@am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -MT callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.o -MD -MP -MF "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.Tpo" -c -o callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.o `test -f 'sid.c' || echo '$(srcdir)/'`sid.c; \
-@am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.Tpo" "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.Po"; else rm -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.Tpo"; exit 1; fi
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='sid.c' object='callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.o' libtool=no @AMDEPBACKSLASH@
+callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.o: sigil.c
+@am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -MT callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.o -MD -MP -MF "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.Tpo" -c -o callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.o `test -f 'sigil.c' || echo '$(srcdir)/'`sigil.c; \
+@am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.Tpo" "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.Po"; else rm -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.Tpo"; exit 1; fi
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='sigil.c' object='callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -c -o callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.o `test -f 'sid.c' || echo '$(srcdir)/'`sid.c
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -c -o callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.o `test -f 'sigil.c' || echo '$(srcdir)/'`sigil.c
 
-callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.obj: sid.c
-@am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -MT callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.obj -MD -MP -MF "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.Tpo" -c -o callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.obj `if test -f 'sid.c'; then $(CYGPATH_W) 'sid.c'; else $(CYGPATH_W) '$(srcdir)/sid.c'; fi`; \
-@am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.Tpo" "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.Po"; else rm -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.Tpo"; exit 1; fi
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='sid.c' object='callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.obj' libtool=no @AMDEPBACKSLASH@
+callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.obj: sigil.c
+@am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -MT callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.obj -MD -MP -MF "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.Tpo" -c -o callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.obj `if test -f 'sigil.c'; then $(CYGPATH_W) 'sigil.c'; else $(CYGPATH_W) '$(srcdir)/sigil.c'; fi`; \
+@am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.Tpo" "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.Po"; else rm -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.Tpo"; exit 1; fi
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='sigil.c' object='callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -c -o callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sid.obj `if test -f 'sid.c'; then $(CYGPATH_W) 'sid.c'; else $(CYGPATH_W) '$(srcdir)/sid.c'; fi`
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -c -o callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-sigil.obj `if test -f 'sigil.c'; then $(CYGPATH_W) 'sigil.c'; else $(CYGPATH_W) '$(srcdir)/sigil.c'; fi`
 callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-threads.o: threads.c
 @am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CPPFLAGS) $(CPPFLAGS) $(callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_CFLAGS) $(CFLAGS) -MT callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-threads.o -MD -MP -MF "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-threads.Tpo" -c -o callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-threads.o `test -f 'threads.c' || echo '$(srcdir)/'`threads.c; \
 @am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-threads.Tpo" "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-threads.Po"; else rm -f "$(DEPDIR)/callgrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@-threads.Tpo"; exit 1; fi

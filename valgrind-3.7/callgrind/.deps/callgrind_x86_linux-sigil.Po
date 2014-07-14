@@ -1,4 +1,4 @@
-callgrind_x86_linux-sid.o: sid.c ../include/pub_tool_basics.h \
+callgrind_x86_linux-sigil.o: sigil.c ../include/pub_tool_basics.h \
  ../VEX/pub/libvex_basictypes.h \
  /archgroup/sw/gcc/4.4.7/lib/gcc/x86_64-unknown-linux-gnu/4.4.7/include/stdarg.h \
  ../include/pub_tool_redir.h ../config.h ../include/valgrind.h \
@@ -23,7 +23,7 @@ callgrind_x86_linux-sid.o: sid.c ../include/pub_tool_basics.h \
  ../VEX/pub/libvex_ir.h ../include/pub_tool_tooliface.h \
  ../include/pub_tool_errormgr.h ../include/pub_tool_execontext.h \
  ../include/pub_tool_xarray.h ../include/pub_tool_clientstate.h events.h \
- costs.h sid.h ../include/pub_tool_threadstate.h
+ costs.h sigil.h ../include/pub_tool_threadstate.h
 
 ../include/pub_tool_basics.h:
 
@@ -123,6 +123,6 @@ events.h:
 
 costs.h:
 
-sid.h:
+sigil.h:
 
 ../include/pub_tool_threadstate.h:

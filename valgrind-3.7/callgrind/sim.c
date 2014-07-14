@@ -63,7 +63,7 @@
 
 /* GLOBAL VARIABLES ADDED TO PUT ALL DATA ACCESSES FOR EVERY ADDRESS IN A LINKED LIST - Sid */
 
-#include "sid.h"
+#include "sigil.h"
 #include "pub_tool_mallocfree.h"
 
 /* Done with GLOBAL VARIABLEs - inserted by Sid */

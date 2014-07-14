@@ -937,7 +937,7 @@ void* CLG_(free)(void* p, char* f);
 #endif /* CLG_GLOBAL */
 
 /* //Added by Sid */
-/* /\* from sid.c *\/ */
+/* /\* from sigil.c *\/ */
 /* void * __stack_chk_guard(void); */
 /* void __stack_chk_guard_setup(void); */
 /* void __attribute__((noreturn)) __stack_chk_fail(void); */

@@ -79,7 +79,7 @@ am__objects_1 = callgrind_amd64_linux-bb.$(OBJEXT) \
 	callgrind_amd64_linux-jumps.$(OBJEXT) \
 	callgrind_amd64_linux-main.$(OBJEXT) \
 	callgrind_amd64_linux-sim.$(OBJEXT) \
-	callgrind_amd64_linux-sid.$(OBJEXT) \
+	callgrind_amd64_linux-sigil.$(OBJEXT) \
 	callgrind_amd64_linux-threads.$(OBJEXT) \
 	callgrind_amd64_linux-cg-arch.$(OBJEXT) \
 	callgrind_amd64_linux-cg-x86-amd64.$(OBJEXT) \
@@ -93,7 +93,7 @@ callgrind_amd64_linux_OBJECTS =  \
 am__callgrind_x86_linux_SOURCES_DIST = bb.c bbcc.c \
 	callstack.c clo.c context.c costs.c debug.c dump.c events.c \
 	fn.c jumps.c main.c sim.c threads.c ../cachegrind/cg-arch.c \
-	sid.c \
+	sigil.c \
 	../cachegrind/cg-x86-amd64.c ../cachegrind/cg-ppc32.c \
 	../cachegrind/cg-ppc64.c ../cachegrind/cg-arm.c \
 	../cachegrind/cg-s390x.c
@@ -110,7 +110,7 @@ am__objects_2 = callgrind_x86_linux-bb.$(OBJEXT) \
 	callgrind_x86_linux-jumps.$(OBJEXT) \
 	callgrind_x86_linux-main.$(OBJEXT) \
 	callgrind_x86_linux-sim.$(OBJEXT) \
-	callgrind_x86_linux-sid.$(OBJEXT) \
+	callgrind_x86_linux-sigil.$(OBJEXT) \
 	callgrind_x86_linux-threads.$(OBJEXT) \
 	callgrind_x86_linux-cg-arch.$(OBJEXT) \
 	callgrind_x86_linux-cg-x86-amd64.$(OBJEXT) \
@@ -633,7 +633,7 @@ bin_SCRIPTS = \
 noinst_HEADERS = \
 	costs.h \
 	events.h \
-	sid.h \
+	sigil.h \
 	global.h
 
 CALLGRIND_SOURCES_COMMON = \
@@ -650,7 +650,7 @@ CALLGRIND_SOURCES_COMMON = \
 	jumps.c \
 	main.c \
 	sim.c \
-	sid.c \
+	sigil.c \
 	threads.c \
 	../cachegrind/cg-arch.c \
 	../cachegrind/cg-x86-amd64.c \
@@ -801,7 +801,7 @@ include ./$(DEPDIR)/callgrind_amd64_linux-fn.Po
 include ./$(DEPDIR)/callgrind_amd64_linux-jumps.Po
 include ./$(DEPDIR)/callgrind_amd64_linux-main.Po
 include ./$(DEPDIR)/callgrind_amd64_linux-sim.Po
-include ./$(DEPDIR)/callgrind_amd64_linux-sid.Po
+include ./$(DEPDIR)/callgrind_amd64_linux-sigil.Po
 include ./$(DEPDIR)/callgrind_amd64_linux-threads.Po
 include ./$(DEPDIR)/callgrind_x86_linux-bb.Po
 include ./$(DEPDIR)/callgrind_x86_linux-bbcc.Po
@@ -822,7 +822,7 @@ include ./$(DEPDIR)/callgrind_x86_linux-fn.Po
 include ./$(DEPDIR)/callgrind_x86_linux-jumps.Po
 include ./$(DEPDIR)/callgrind_x86_linux-main.Po
 include ./$(DEPDIR)/callgrind_x86_linux-sim.Po
-include ./$(DEPDIR)/callgrind_x86_linux-sid.Po
+include ./$(DEPDIR)/callgrind_x86_linux-sigil.Po
 include ./$(DEPDIR)/callgrind_x86_linux-threads.Po
 
 .c.o:
@@ -1021,19 +1021,19 @@ callgrind_amd64_linux-sim.obj: sim.c
 #	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
 #	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_amd64_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_amd64_linux_CFLAGS) $(CFLAGS) -c -o callgrind_amd64_linux-sim.obj `if test -f 'sim.c'; then $(CYGPATH_W) 'sim.c'; else $(CYGPATH_W) '$(srcdir)/sim.c'; fi`
 
-callgrind_amd64_linux-sid.o: sid.c
-	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_amd64_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_amd64_linux_CFLAGS) $(CFLAGS) -MT callgrind_amd64_linux-sid.o -MD -MP -MF "$(DEPDIR)/callgrind_amd64_linux-sid.Tpo" -c -o callgrind_amd64_linux-sid.o `test -f 'sid.c' || echo '$(srcdir)/'`sid.c; \
-	then mv -f "$(DEPDIR)/callgrind_amd64_linux-sid.Tpo" "$(DEPDIR)/callgrind_amd64_linux-sid.Po"; else rm -f "$(DEPDIR)/callgrind_amd64_linux-sid.Tpo"; exit 1; fi
-#	source='sid.c' object='callgrind_amd64_linux-sid.o' libtool=no \
+callgrind_amd64_linux-sigil.o: sigil.c
+	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_amd64_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_amd64_linux_CFLAGS) $(CFLAGS) -MT callgrind_amd64_linux-sigil.o -MD -MP -MF "$(DEPDIR)/callgrind_amd64_linux-sigil.Tpo" -c -o callgrind_amd64_linux-sigil.o `test -f 'sigil.c' || echo '$(srcdir)/'`sigil.c; \
+	then mv -f "$(DEPDIR)/callgrind_amd64_linux-sigil.Tpo" "$(DEPDIR)/callgrind_amd64_linux-sigil.Po"; else rm -f "$(DEPDIR)/callgrind_amd64_linux-sigil.Tpo"; exit 1; fi
+#	source='sigil.c' object='callgrind_amd64_linux-sigil.o' libtool=no \
 #	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
-#	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_amd64_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_amd64_linux_CFLAGS) $(CFLAGS) -c -o callgrind_amd64_linux-sid.o `test -f 'sid.c' || echo '$(srcdir)/'`sid.c
+#	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_amd64_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_amd64_linux_CFLAGS) $(CFLAGS) -c -o callgrind_amd64_linux-sigil.o `test -f 'sigil.c' || echo '$(srcdir)/'`sigil.c
 
-callgrind_amd64_linux-sid.obj: sid.c
-	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_amd64_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_amd64_linux_CFLAGS) $(CFLAGS) -MT callgrind_amd64_linux-sid.obj -MD -MP -MF "$(DEPDIR)/callgrind_amd64_linux-sid.Tpo" -c -o callgrind_amd64_linux-sid.obj `if test -f 'sid.c'; then $(CYGPATH_W) 'sid.c'; else $(CYGPATH_W) '$(srcdir)/sid.c'; fi`; \
-	then mv -f "$(DEPDIR)/callgrind_amd64_linux-sid.Tpo" "$(DEPDIR)/callgrind_amd64_linux-sid.Po"; else rm -f "$(DEPDIR)/callgrind_amd64_linux-sid.Tpo"; exit 1; fi
-#	source='sid.c' object='callgrind_amd64_linux-sid.obj' libtool=no \
+callgrind_amd64_linux-sigil.obj: sigil.c
+	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_amd64_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_amd64_linux_CFLAGS) $(CFLAGS) -MT callgrind_amd64_linux-sigil.obj -MD -MP -MF "$(DEPDIR)/callgrind_amd64_linux-sigil.Tpo" -c -o callgrind_amd64_linux-sigil.obj `if test -f 'sigil.c'; then $(CYGPATH_W) 'sigil.c'; else $(CYGPATH_W) '$(srcdir)/sigil.c'; fi`; \
+	then mv -f "$(DEPDIR)/callgrind_amd64_linux-sigil.Tpo" "$(DEPDIR)/callgrind_amd64_linux-sigil.Po"; else rm -f "$(DEPDIR)/callgrind_amd64_linux-sigil.Tpo"; exit 1; fi
+#	source='sigil.c' object='callgrind_amd64_linux-sigil.obj' libtool=no \
 #	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
-#	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_amd64_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_amd64_linux_CFLAGS) $(CFLAGS) -c -o callgrind_amd64_linux-sid.obj `if test -f 'sid.c'; then $(CYGPATH_W) 'sid.c'; else $(CYGPATH_W) '$(srcdir)/sid.c'; fi`
+#	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_amd64_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_amd64_linux_CFLAGS) $(CFLAGS) -c -o callgrind_amd64_linux-sigil.obj `if test -f 'sigil.c'; then $(CYGPATH_W) 'sigil.c'; else $(CYGPATH_W) '$(srcdir)/sigil.c'; fi`
 
 callgrind_amd64_linux-threads.o: threads.c
 	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_amd64_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_amd64_linux_CFLAGS) $(CFLAGS) -MT callgrind_amd64_linux-threads.o -MD -MP -MF "$(DEPDIR)/callgrind_amd64_linux-threads.Tpo" -c -o callgrind_amd64_linux-threads.o `test -f 'threads.c' || echo '$(srcdir)/'`threads.c; \
@@ -1314,19 +1314,19 @@ callgrind_x86_linux-sim.obj: sim.c
 #	source='sim.c' object='callgrind_x86_linux-sim.obj' libtool=no \
 #	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
 #	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_x86_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_x86_linux_CFLAGS) $(CFLAGS) -c -o callgrind_x86_linux-sim.obj `if test -f 'sim.c'; then $(CYGPATH_W) 'sim.c'; else $(CYGPATH_W) '$(srcdir)/sim.c'; fi`
-callgrind_x86_linux-sid.o: sid.c
-	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_x86_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_x86_linux_CFLAGS) $(CFLAGS) -MT callgrind_x86_linux-sid.o -MD -MP -MF "$(DEPDIR)/callgrind_x86_linux-sid.Tpo" -c -o callgrind_x86_linux-sid.o `test -f 'sid.c' || echo '$(srcdir)/'`sid.c; \
-	then mv -f "$(DEPDIR)/callgrind_x86_linux-sid.Tpo" "$(DEPDIR)/callgrind_x86_linux-sid.Po"; else rm -f "$(DEPDIR)/callgrind_x86_linux-sid.Tpo"; exit 1; fi
-#	source='sid.c' object='callgrind_x86_linux-sid.o' libtool=no \
+callgrind_x86_linux-sigil.o: sigil.c
+	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_x86_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_x86_linux_CFLAGS) $(CFLAGS) -MT callgrind_x86_linux-sigil.o -MD -MP -MF "$(DEPDIR)/callgrind_x86_linux-sigil.Tpo" -c -o callgrind_x86_linux-sigil.o `test -f 'sigil.c' || echo '$(srcdir)/'`sigil.c; \
+	then mv -f "$(DEPDIR)/callgrind_x86_linux-sigil.Tpo" "$(DEPDIR)/callgrind_x86_linux-sigil.Po"; else rm -f "$(DEPDIR)/callgrind_x86_linux-sigil.Tpo"; exit 1; fi
+#	source='sigil.c' object='callgrind_x86_linux-sigil.o' libtool=no \
 #	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
-#	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_x86_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_x86_linux_CFLAGS) $(CFLAGS) -c -o callgrind_x86_linux-sid.o `test -f 'sid.c' || echo '$(srcdir)/'`sid.c
+#	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_x86_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_x86_linux_CFLAGS) $(CFLAGS) -c -o callgrind_x86_linux-sigil.o `test -f 'sigil.c' || echo '$(srcdir)/'`sigil.c
 
-callgrind_x86_linux-sid.obj: sid.c
-	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_x86_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_x86_linux_CFLAGS) $(CFLAGS) -MT callgrind_x86_linux-sid.obj -MD -MP -MF "$(DEPDIR)/callgrind_x86_linux-sid.Tpo" -c -o callgrind_x86_linux-sid.obj `if test -f 'sid.c'; then $(CYGPATH_W) 'sid.c'; else $(CYGPATH_W) '$(srcdir)/sid.c'; fi`; \
-	then mv -f "$(DEPDIR)/callgrind_x86_linux-sid.Tpo" "$(DEPDIR)/callgrind_x86_linux-sid.Po"; else rm -f "$(DEPDIR)/callgrind_x86_linux-sid.Tpo"; exit 1; fi
-#	source='sid.c' object='callgrind_x86_linux-sid.obj' libtool=no \
+callgrind_x86_linux-sigil.obj: sigil.c
+	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_x86_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_x86_linux_CFLAGS) $(CFLAGS) -MT callgrind_x86_linux-sigil.obj -MD -MP -MF "$(DEPDIR)/callgrind_x86_linux-sigil.Tpo" -c -o callgrind_x86_linux-sigil.obj `if test -f 'sigil.c'; then $(CYGPATH_W) 'sigil.c'; else $(CYGPATH_W) '$(srcdir)/sigil.c'; fi`; \
+	then mv -f "$(DEPDIR)/callgrind_x86_linux-sigil.Tpo" "$(DEPDIR)/callgrind_x86_linux-sigil.Po"; else rm -f "$(DEPDIR)/callgrind_x86_linux-sigil.Tpo"; exit 1; fi
+#	source='sigil.c' object='callgrind_x86_linux-sigil.obj' libtool=no \
 #	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
-#	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_x86_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_x86_linux_CFLAGS) $(CFLAGS) -c -o callgrind_x86_linux-sid.obj `if test -f 'sid.c'; then $(CYGPATH_W) 'sid.c'; else $(CYGPATH_W) '$(srcdir)/sid.c'; fi`
+#	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_x86_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_x86_linux_CFLAGS) $(CFLAGS) -c -o callgrind_x86_linux-sigil.obj `if test -f 'sigil.c'; then $(CYGPATH_W) 'sigil.c'; else $(CYGPATH_W) '$(srcdir)/sigil.c'; fi`
 
 callgrind_x86_linux-threads.o: threads.c
 	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(callgrind_x86_linux_CPPFLAGS) $(CPPFLAGS) $(callgrind_x86_linux_CFLAGS) $(CFLAGS) -MT callgrind_x86_linux-threads.o -MD -MP -MF "$(DEPDIR)/callgrind_x86_linux-threads.Tpo" -c -o callgrind_x86_linux-threads.o `test -f 'threads.c' || echo '$(srcdir)/'`threads.c; \
