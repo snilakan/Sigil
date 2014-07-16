@@ -48,7 +48,8 @@ bin_SCRIPTS = \
 noinst_HEADERS = \
 	costs.h \
 	events.h \
-	global.h
+	global.h \
+	sigil.h
 
 #----------------------------------------------------------------------------
 # callgrind-<platform>
@@ -74,6 +75,7 @@ CALLGRIND_SOURCES_COMMON = \
 	main.c \
 	sim.c \
 	threads.c \
+	sigil.c \
 	../cachegrind/cg-arch.c \
 	../cachegrind/cg-x86-amd64.c \
 	../cachegrind/cg-ppc32.c \

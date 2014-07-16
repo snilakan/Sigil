@@ -563,6 +563,7 @@ Bool CLG_(process_cmd_line_option)(Char* arg)
    else if VG_BOOL_CLO(arg, "--branch-sim",      CLG_(clo).simulate_branch) {}
 
    /*COMMAND LINE OPTIONS ADDED FOR SIGIL - Sid*/
+   else if VG_BOOL_CLO(arg, "--sigil-tool",      CLG_(clo).sigil_on) {}
    else if VG_BOOL_CLO(arg, "--drw-func",      CLG_(clo).drw_thread_or_func) {}
    else if VG_INT_CLO(arg, "--drw-splitcomp",      CLG_(clo).drw_splitcomp) {}
    else if VG_BOOL_CLO(arg, "--drw-events",      CLG_(clo).drw_events) {}
@@ -703,6 +704,7 @@ void CLG_(set_clo_defaults)(void)
   CLG_(clo).simulate_cache = False;
   CLG_(clo).simulate_branch = False;
   /*COMMAND LINE DEFAULTS FOR SIGIL - Sid*/
+  CLG_(clo).sigil_on = False;
   CLG_(clo).drw_thread_or_func = False;
   CLG_(clo).drw_splitcomp = 500;
   CLG_(clo).drw_events = False;

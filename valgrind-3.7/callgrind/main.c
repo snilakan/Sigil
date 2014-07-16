@@ -244,12 +244,14 @@ void log_ops_event(InstrInfo* ii, IRType Op)
     }
 
 /* FUNCTION CALLs ADDED TO COUNT ALL OPERATIONS */
-    //Lets figure out whether its integer or floating point. We have not merged multiple operations although we should
-    if(Op <  Ity_F32){
-      CLG_(storeIDRWcontext)(ii, 1, /*addr*/0, /*WR*/0, 3);
-    }
-    else if(Op < Ity_V128){
-      CLG_(storeIDRWcontext)(ii, 1, /*addr*/0, /*WR*/0, 4);
+    if (CLG_(clo).sigil_on){
+      //Lets figure out whether its integer or floating point. We have not merged multiple operations although we should
+      if(Op <  Ity_F32){
+	CLG_(storeIDRWcontext)(ii, 1, /*addr*/0, /*WR*/0, 3);
+      }
+      else if(Op < Ity_V128){
+	CLG_(storeIDRWcontext)(ii, 1, /*addr*/0, /*WR*/0, 4);
+      }
     }
 /* Done with FUNCTION CALL - inserted by Sid */
 }
@@ -1788,17 +1790,19 @@ void CLG_(pre_syscalltime)(ThreadId tid, UInt syscallno,
                            UWord* args, UInt nArgs)
 {
 /*Added the following code to accurately follow what happens during a syscall*/
-  if(CLG_(clo).drw_syscall){
-    int i, len; Addr a;
-    CLG_(current_syscall) = syscallno;
-    CLG_(current_syscall_tid) = CLG_(current_tid);
-    //  VG_(printf)("Entered syscall: Syscallno = %d, function: %s\n",syscallno, CLG_(current_state).cxt->fn[0]->name);
-    for(i = 0; i < CLG_(syscall_addrchunk_idx); i++){
-      len = CLG_(syscall_addrchunks)[i].last - CLG_(syscall_addrchunks)[i].first + 1;
-      a = CLG_(syscall_addrchunks)[i].first;
-      CLG_(storeIDRWcontext)( NULL, len, a, 0, 1);
+  if (CLG_(clo).sigil_on){
+    if(CLG_(clo).drw_syscall){
+      int i, len; Addr a;
+      CLG_(current_syscall) = syscallno;
+      CLG_(current_syscall_tid) = CLG_(current_tid);
+      //  VG_(printf)("Entered syscall: Syscallno = %d, function: %s\n",syscallno, CLG_(current_state).cxt->fn[0]->name);
+      for(i = 0; i < CLG_(syscall_addrchunk_idx); i++){
+	len = CLG_(syscall_addrchunks)[i].last - CLG_(syscall_addrchunks)[i].first + 1;
+	a = CLG_(syscall_addrchunks)[i].first;
+	CLG_(storeIDRWcontext)( NULL, len, a, 0, 1);
+      }
+      CLG_(syscall_addrchunk_idx) = 0;
     }
-    CLG_(syscall_addrchunk_idx) = 0;
   }
 /*Done addition by Sid*/
   
@@ -1845,17 +1849,19 @@ void CLG_(post_syscalltime)(ThreadId tid, UInt syscallno,
   }
 
 /*Added the following code to accurately follow what happens during a syscall*/
-  if(CLG_(clo).drw_syscall){
-    if(CLG_(current_syscall_tid) == CLG_(current_tid))
-      //tl_assert(CLG_(current_syscall) == syscallno);
-      if(CLG_(current_syscall) != syscallno)
-	VG_(printf)("Issues with Syscalls not matching. Syscall no. %d just finished, but the last active syscall was %d\n",syscallno, CLG_(current_syscall));
-    //   VG_(printf)("Syscall ended: Syscallno = %d, function: %s\n", syscallno, CLG_(current_state).cxt->fn[0]->name);
-    /*    //------------------------------------------------------------------------ */
-    CLG_(current_syscall) = -1;
-    CLG_(current_syscall_tid) = -1;
+  if (CLG_(clo).sigil_on){
+    if(CLG_(clo).drw_syscall){
+      if(CLG_(current_syscall_tid) == CLG_(current_tid))
+	//tl_assert(CLG_(current_syscall) == syscallno);
+	if(CLG_(current_syscall) != syscallno)
+	  VG_(printf)("Issues with Syscalls not matching. Syscall no. %d just finished, but the last active syscall was %d\n",syscallno, CLG_(current_syscall));
+      //   VG_(printf)("Syscall ended: Syscallno = %d, function: %s\n", syscallno, CLG_(current_state).cxt->fn[0]->name);
+      /*    //------------------------------------------------------------------------ */
+      CLG_(current_syscall) = -1;
+      CLG_(current_syscall_tid) = -1;
+    }
   }
-/*Done addition by Sid*/
+  /*Done addition by Sid*/
 }
 
 static UInt ULong_width(ULong n)
@@ -1923,8 +1929,10 @@ void finish(void)
   CLG_(forall_threads)(unwind_thread);
 
   /* FUNCTION CALLS ADDED TO PUT ALL DATA ACCESSES FOR EVERY ADDRESS IN A LINKED LIST - Sid */
-  CLG_(print_to_file) ();
-  CLG_(free_funcarray)();
+  if (CLG_(clo).sigil_on){
+    CLG_(print_to_file) ();
+    CLG_(free_funcarray)();
+  }
   /* Done with FUNCTION CALLS - inserted by Sid */
   CLG_(dump_profile)(0, False);
 
@@ -2080,7 +2088,9 @@ void CLG_(post_clo_init)(void)
 
    CLG_(init_dumps)();
   /* FUNCTION CALLS ADDED TO PUT ALL DATA ACCESSES FOR EVERY ADDRESS IN A LINKED LIST - Sid */
-  CLG_(init_funcarray)();
+   if (CLG_(clo).sigil_on){
+     CLG_(init_funcarray)();
+   }
   /* Done with FUNCTION CALLS - inserted by Sid */
 
    (*CLG_(cachesim).post_clo_init)();

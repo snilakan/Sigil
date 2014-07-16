@@ -229,7 +229,7 @@ void CLG_(init_funcarray)()
   }
   SM_bits = VG_(log2)( LWC_SM_SIZE );
   PM_bits = VG_(log2)( LWC_PM_SIZE );
-  VG_(printf)(" Number of bits used for addressing within SM: %d\n", SM_bits);
+  //VG_(printf)(" Number of bits used for addressing within SM: %d\n", SM_bits);
 
   /*If events are enabled, initialize structures and malloc a large buffer in which to store events*/
   if(CLG_(clo).drw_events){
@@ -415,8 +415,8 @@ static int mark_event_shared(drwevent* producer_event, ULong shared_unique, Addr
 static void checkAddrValid( Addr ea )
 {
   if( ea > MAX_PRIMARY_ADDRESS ){
-    VG_(printf)("Address greater than 38-bit encountered!\n");
-    tl_assert(0);
+    VG_(printf)("Address greater than 38-bit encountered! Quitting now\n");
+    VG_(exit)(1);
   }
 }
 
@@ -1119,8 +1119,10 @@ static int search_funcinstlist (funcinst** funcinstoriginal, Context* func_cxt, 
 
   if(thread_globvar->funcinst_first == 0){
     //cxt_size should be 1 in this case. Do an assert.
-    if(cxt_size != 1)
-      tl_assert(0);
+    if(cxt_size != 1){
+      VG_(printf)("Context size is not 1, when first function has not yet been encountered. Aborting...\n");
+      VG_(exit)(1);
+    }
     current_funcinst_ptr = create_funcinstlist(0, func_cxt->fn[0]->number, tid);
     *refarg = current_funcinst_ptr;
     return 0;
@@ -1133,7 +1135,8 @@ static int search_funcinstlist (funcinst** funcinstoriginal, Context* func_cxt, 
   else{ //Not handled at the moment
     //For implementation hints see same section in insert_to_funcinstlist
     VG_(printf)("\nPartial context not yet supported. Please increase the number of --separate-callers option when invoking callgrind\n");
-    tl_assert(0);
+    VG_(exit)(1);
+    //tl_assert(0);
   }
 
   for(i = ilimit; i >= 0; i--){ //Traverse the list of the context of the current function, knowing that it starts from the first ever function.
@@ -1170,8 +1173,10 @@ static int insert_to_funcinstlist (funcinst** funcinstoriginal, Context* func_cx
   //CLG_(current_cxt) = CLG_(current_state)->bbcc->bb->jmpkind; //Save the context, for quick checking when storeDRWcontext is invoked in the same context.
   if(thread_globvar->funcinst_first == 0){
     //cxt_size should be 1 in this case. Do an assert. //Found out later that this need not always necessarily be the case. This can be put back in when both storeDRWcontext and storeIcontext are "activated"
-    if(func_cxt->size != 1)
-      tl_assert(0);
+    if(func_cxt->size != 1){
+      VG_(printf)("Context size is not 1, when first function has not yet been encountered. Aborting...\n");
+      VG_(exit)(1);
+    }
     current_funcinst_ptr = create_funcinstlist(0, func_cxt->fn[0]->number, tid);
     *refarg = current_funcinst_ptr;
     thread_globvar->funcinst_first = current_funcinst_ptr;
@@ -1202,7 +1207,8 @@ static int insert_to_funcinstlist (funcinst** funcinstoriginal, Context* func_cx
   }
   else{ //Not handled at the moment
     VG_(printf)("\nPartial context not yet supported. Please increase the number of --separate-callers option when invoking callgrind\n");
-    tl_assert(0);
+    VG_(exit)(1);
+    //tl_assert(0);
 	// Beginnings of an alternate approach given below
 	//func_num1 = func_cxt->fn[cxt_size - 1]->number;
     //func_num2 = thread_globvar->funcinst_first;
@@ -2267,7 +2273,7 @@ void CLG_(storeIDRWcontext) (InstrInfo* inode, int datasize, Addr ea, Bool WR, i
     //should be a way of checking the calltree without resorting to checking with the fullcontext from the top. For now, we just check from the top.
     if(!insert_to_funcnodelist(&thread_globvar->funcinfo_first, funcarrayindex, &current_funcinfo_ptr, function, threadarrayindex)){
       
-      if((thread_globvar->current_drwbbinfo.previous_bb == 0) || (thread_globvar->previous_funcinst == 0)){ //First check if pointers are valid
+      if((thread_globvar->current_drwbbinfo.previous_bb == 0) || (thread_globvar->previous_funcinst == 0) || CLG_(current_state).cxt->size < 2){ //First check if pointers are valid
 	insert_to_funcinstlist(&thread_globvar->funcinst_first, CLG_(current_state).cxt, CLG_(current_state).cxt->size, &current_funcinst_ptr, threadarrayindex, 1);
       }
       else if((thread_globvar->current_drwbbinfo.previous_bb->jmp[thread_globvar->current_drwbbinfo.previous_bb_jmpindex].jmpkind == jk_Call) && (thread_globvar->previous_funcinst->fn_number == CLG_(current_state).cxt->fn[1]->number)){ //Then check conditions
@@ -2734,6 +2740,13 @@ static void print_for_funcinst (funcinst *funcinstpointer, int fd, char* caller,
 /*print data through iterative tree traversal*/
 static void print_recurse_data(funcinst *p, int fd, int depth, drwglobvars *thread_globvar){
   char caller[3];
+  //Special case, when p is the first and only node in the tree
+  if (!p->caller && !p->num_callees){
+    //Print some information for the node before leaving
+    VG_(sprintf)(caller, "*");
+    print_for_funcinst(p, fd, caller, thread_globvar); //Print the current function and the functions it has consumed from. ** denotes that all the *s that follow will be the immediate callees of this function.
+    return;
+  }
   do
   {
 	while(p != 0)
@@ -2782,13 +2795,19 @@ static void print_recurse_data(funcinst *p, int fd, int depth, drwglobvars *thre
 /*print tree through iterative tree traversal*/
 static void print_recurse_tree(funcinst *p, int fd, int depth, drwglobvars *thread_globvar){
   char buf[2048];
+  //Special case, when p is the first and only node in the tree
+  if (!p->caller && !p->num_callees){
+    //Print some information for the node before leaving
+    VG_(sprintf)(buf, "%d, %d, %s, %d\n", p->fn_number, p->funcinst_number, ((p->num_callees) ? "True":"False"), p->num_calls);
+    my_fwrite(fd, (void*)buf, VG_(strlen)(buf));
+    return;
+  }
   do
   {
 	while(p != 0)
 	{
 		//Print some information for the node before leaving
 		VG_(sprintf)(buf, "%d, %d, %s, %d\n", p->fn_number, p->funcinst_number, ((p->num_callees) ? "True":"False"), p->num_calls);
-		//VG_(write)(fd, (void*)buf, VG_(strlen)(buf));
 		my_fwrite(fd, (void*)buf, VG_(strlen)(buf));
 
 		//Go to the left-most child node. This means that the index has to be zero first
@@ -2862,6 +2881,12 @@ static void print_hist_data (funcinst *funcinstpointer, int fd){
 
 static void print_recurse_reusedata (funcinst *p, int fd, int depth, drwglobvars *thread_globvar){
   char buf[2048];
+  //Special case, when p is the first and only node in the tree
+  if (!p->caller && !p->num_callees){
+    //Print some information for the node before leaving
+    print_hist_data(p, fd);
+    return;
+  }
   do
   {
 	while(p != 0)
@@ -2971,10 +2996,10 @@ void CLG_(print_to_file) ()
     
     //PRINT METADATA
     VG_(sprintf)(buf, "Tool: Sigil \nVersion: 1.0\n\n");
-    my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file
+    my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the original callgrind.out file
     
     VG_(sprintf)(buf, "SUMMARY: \n\n");
-    my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file
+    my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the original callgrind.out file
 
     VG_(sprintf)(buf, "Total Memory Reads(bytes): %-20llu Total Memory Writes(bytes): %-20llu Total Instrs: %-20llu Total Flops: %-20llu Iops: %-20llu\n\n",CLG_(total_data_reads), CLG_(total_data_writes), CLG_(total_instrs), CLG_(total_flops), CLG_(total_iops));
     my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file
@@ -2993,7 +3018,8 @@ void CLG_(print_to_file) ()
     my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file
 
 	/* Print the tree first. Post-processing will build the tree and then populate it with data*/
-    print_recurse_tree(thread_globvar->funcinst_first, fd, 0, thread_globvar);
+    if(thread_globvar->funcinst_first)
+      print_recurse_tree(thread_globvar->funcinst_first, fd, 0, thread_globvar);
     
     VG_(sprintf)(buf, "\n\nEND TREE DUMP\n\n");
     my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file
@@ -3004,10 +3030,11 @@ void CLG_(print_to_file) ()
     VG_(sprintf)(buf, "%20s %20s %20s %50s %20s %20s %20s %20s %20s %20s %20s %20s\n\n\n","THREAD NUMBER", "FUNCTION NUMBER", "FUNC_INST NUM", "FUNCTION NAME", "PROD?", "INSTRS", "FLOPS", "IOPS", "IPCOMM_UNIQUE", "OPCOMM_UNIQUE", "IPCOMM", "OPCOMM");
     my_fwrite(fd, (void*)buf, VG_(strlen)(buf)); // This will end up writing into the orignial callgrind.out file
     
-	/* Print the data for all functions. Post-processing will build the tree and then populate it with data */
-    print_recurse_data(thread_globvar->funcinst_first, fd, 0, thread_globvar);
+    /* Print the data for all functions. Post-processing will build the tree and then populate it with data */
+    if(thread_globvar->funcinst_first)
+      print_recurse_data(thread_globvar->funcinst_first, fd, 0, thread_globvar);
     
-	//Do a final flush to ensure print buffers are completely empty
+    //Do a final flush to ensure print buffers are completely empty
     fwrite_flush();
     VG_(close)( (Int)sr_Res(res) );
     if (num_valid_threads == CLG_(num_threads))

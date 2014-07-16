@@ -123,6 +123,7 @@ struct _CommandLineOptions {
   Bool pop_on_jump;       /* Handle a jump between functions as ret+call */
 
   /*FUNCTION CALL ADDED TO COUNT ALL OPERATIONS - Sid*/
+  Bool sigil_on;
   Bool drw_thread_or_func;
   Int drw_splitcomp;
   Bool drw_events;

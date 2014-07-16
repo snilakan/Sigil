@@ -1104,7 +1104,9 @@ static void log_1I0D(InstrInfo* ii)
 		  CLG_(current_state).cost + fullOffset(EG_IR) );
     }
 /* FUNCTION CALL ADDED TO PUT ALL DATA ACCESSES FOR EVERY ADDRESS IN A LINKED LIST - Sid */
-    CLG_(storeIDRWcontext)(ii, 1, /*addr*/0, /*WR*/0, 0);
+    if (CLG_(clo).sigil_on){
+      CLG_(storeIDRWcontext)(ii, 1, /*addr*/0, /*WR*/0, 0);
+    }
 /* Done with FUNCTION CALL - inserted by Sid */
 }
 
@@ -1140,7 +1142,9 @@ static void log_2I0D(InstrInfo* ii1, InstrInfo* ii2)
     inc_costs(Ir2Res, global_cost_Ir,
               CLG_(cost_base) + ii2->cost_offset + ii2->eventset->offset[EG_IR]);
 /* FUNCTION CALL ADDED TO PUT ALL DATA ACCESSES FOR EVERY ADDRESS IN A LINKED LIST - Sid */
-    CLG_(storeIDRWcontext)(ii1, 2, /*addr*/0, /*WR*/0, 0);
+    if (CLG_(clo).sigil_on){
+      CLG_(storeIDRWcontext)(ii1, 2, /*addr*/0, /*WR*/0, 0);
+    }
 /* Done with FUNCTION CALL - inserted by Sid */
 }
 
@@ -1181,7 +1185,9 @@ static void log_3I0D(InstrInfo* ii1, InstrInfo* ii2, InstrInfo* ii3)
     inc_costs(Ir3Res, global_cost_Ir,
               CLG_(cost_base) + ii3->cost_offset + ii3->eventset->offset[EG_IR]);
 /* FUNCTION CALL ADDED TO PUT ALL DATA ACCESSES FOR EVERY ADDRESS IN A LINKED LIST - Sid */
-    CLG_(storeIDRWcontext)(ii1, 3, /*addr*/0, /*WR*/0, 0);
+    if (CLG_(clo).sigil_on){
+      CLG_(storeIDRWcontext)(ii1, 3, /*addr*/0, /*WR*/0, 0);
+    }
 /* Done with FUNCTION CALL - inserted by Sid */
 }
 
@@ -1218,8 +1224,10 @@ static void log_1I1Dr(InstrInfo* ii, Addr data_addr, Word data_size)
 		  CLG_(current_state).cost + fullOffset(EG_DR) );
     }
 /* FUNCTION CALL ADDED TO PUT ALL DATA ACCESSES FOR EVERY ADDRESS IN A LINKED LIST - Sid */
-    CLG_(storeIDRWcontext)(ii, 1, /*addr*/0, /*WR*/0, 0);
-    CLG_(storeIDRWcontext) (ii, data_size, data_addr, /*WR*/0, 1);
+    if (CLG_(clo).sigil_on){
+      CLG_(storeIDRWcontext)(ii, 1, /*addr*/0, /*WR*/0, 0);
+      CLG_(storeIDRWcontext) (ii, data_size, data_addr, /*WR*/0, 1);
+    }
 /* Done with FUNCTION CALL - inserted by Sid */
 }
 
@@ -1247,7 +1255,9 @@ static void log_0I1Dr(InstrInfo* ii, Addr data_addr, Word data_size)
 		  CLG_(current_state).cost + fullOffset(EG_DR) );
     }
 /* FUNCTION CALL ADDED TO PUT ALL DATA ACCESSES FOR EVERY ADDRESS IN A LINKED LIST - Sid */
-    CLG_(storeIDRWcontext) (ii, data_size, data_addr, /*WR*/0, 1);
+    if (CLG_(clo).sigil_on){
+      CLG_(storeIDRWcontext) (ii, data_size, data_addr, /*WR*/0, 1);
+    }
 /* Done with FUNCTION CALL - inserted by Sid */
 }
 
@@ -1285,8 +1295,10 @@ static void log_1I1Dw(InstrInfo* ii, Addr data_addr, Word data_size)
 		  CLG_(current_state).cost + fullOffset(EG_DW) );
     }
 /* FUNCTION CALL ADDED TO PUT ALL DATA ACCESSES FOR EVERY ADDRESS IN A LINKED LIST - Sid */
-    CLG_(storeIDRWcontext)(ii, 1, /*addr*/0, /*WR*/0, 0);
-    CLG_(storeIDRWcontext) (ii, data_size, data_addr, /*WR*/0, 2);
+    if (CLG_(clo).sigil_on){
+      CLG_(storeIDRWcontext)(ii, 1, /*addr*/0, /*WR*/0, 0);
+      CLG_(storeIDRWcontext) (ii, data_size, data_addr, /*WR*/0, 2);
+    }
 /* Done with FUNCTION CALL - inserted by Sid */
 }
 
@@ -1313,7 +1325,9 @@ static void log_0I1Dw(InstrInfo* ii, Addr data_addr, Word data_size)
 		  CLG_(current_state).cost + fullOffset(EG_DW) );
     }
 /* FUNCTION CALL ADDED TO PUT ALL DATA ACCESSES FOR EVERY ADDRESS IN A LINKED LIST - Sid */
-    CLG_(storeIDRWcontext) (ii, data_size, data_addr, /*WR*/0, 2);
+    if (CLG_(clo).sigil_on){
+      CLG_(storeIDRWcontext) (ii, data_size, data_addr, /*WR*/0, 2);
+    }
 /* Done with FUNCTION CALL - inserted by Sid */
 }
 
