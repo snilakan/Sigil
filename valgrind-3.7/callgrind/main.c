@@ -1115,48 +1115,50 @@ IRSB* CLG_(instrument)( VgCallbackClosure* closure,
 
 	 /*Modified above commented code to count flops and iops*/
 	 case Ist_WrTmp: {
-	    IRExpr* data = st->Ist.WrTmp.data;
-	    switch (data->tag) {
-	    case Iex_Load: {
-	      IRExpr* aexpr = data->Iex.Load.addr;
-	      // Note also, endianness info is ignored.  I guess
-	      // that's not interesting.
-	      addEvent_Dr( &clgs, curr_inode,
-			   sizeofIRType(data->Iex.Load.ty), aexpr );
-	      break;
-	    }
-	    case Iex_Triop: {
-	      //IRExpr* aexpr = data->Iex.Triop.addr;
-	      IRType op = typeOfIRExpr(sbIn->tyenv, data);
-	      addEvent_Op( &clgs, curr_inode,
-			   &op);
-	      break;
-	    }
-	    case Iex_Binop: {
-	      //IRExpr* aexpr = data->Iex.Binop.addr;
-	      IRType op = typeOfIRExpr(sbIn->tyenv, data);
-	      addEvent_Op( &clgs, curr_inode,
-			   &op);
-	      break;
-	    }
-	    case Iex_Unop: {
-	      //IRExpr* aexpr = data->Iex.Unop.addr;
-	      IRType op = typeOfIRExpr(sbIn->tyenv, data);
-	      addEvent_Op( &clgs, curr_inode,
-			   &op);
-	      break;
-	    }
-	    case Iex_Qop: {
-	      //IRExpr* aexpr = data->Iex.Qop.addr;
-	      IRType op = typeOfIRExpr(sbIn->tyenv, data);
-	      addEvent_Op( &clgs, curr_inode,
-			   &op);
-	      break;
-	    }
-	    default:
-	      break;
-	    }
-	    break;
+	   IRExpr* data = st->Ist.WrTmp.data;
+	   if (CLG_(clo).sigil_on){
+	     switch (data->tag) {
+	     case Iex_Load: {
+	       IRExpr* aexpr = data->Iex.Load.addr;
+	       // Note also, endianness info is ignored.  I guess
+	       // that's not interesting.
+	       addEvent_Dr( &clgs, curr_inode,
+			    sizeofIRType(data->Iex.Load.ty), aexpr );
+	       break;
+	     }
+	     case Iex_Triop: {
+	       //IRExpr* aexpr = data->Iex.Triop.addr;
+	       IRType op = typeOfIRExpr(sbIn->tyenv, data);
+	       addEvent_Op( &clgs, curr_inode,
+			    &op);
+	       break;
+	     }
+	     case Iex_Binop: {
+	       //IRExpr* aexpr = data->Iex.Binop.addr;
+	       IRType op = typeOfIRExpr(sbIn->tyenv, data);
+	       addEvent_Op( &clgs, curr_inode,
+			    &op);
+	       break;
+	     }
+	     case Iex_Unop: {
+	       //IRExpr* aexpr = data->Iex.Unop.addr;
+	       IRType op = typeOfIRExpr(sbIn->tyenv, data);
+	       addEvent_Op( &clgs, curr_inode,
+			    &op);
+	       break;
+	     }
+	     case Iex_Qop: {
+	       //IRExpr* aexpr = data->Iex.Qop.addr;
+	       IRType op = typeOfIRExpr(sbIn->tyenv, data);
+	       addEvent_Op( &clgs, curr_inode,
+			    &op);
+	       break;
+	     }
+	     default:
+	       break;
+	     }
+	   }
+	   break;
 	 }
 	 /*Done modification by Sid*/
 

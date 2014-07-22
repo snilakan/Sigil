@@ -1,9 +1,9 @@
-#! /usr/bin/python
+#! /usr/bin/env python
 ##--------------------------------------------------------------------##
-##--- This one just parses the data in my file CLG_DRWTEST          --##
+##--- This one just parses the data in the file sigil.total.out     --##
 ##---                                                              ---##
-##---                                           CLG_drw_annotate   ---##
-##--- Command line args:    ---##
+##---                                                              ---##
+##--- Command line args:                                           ---##
 ##--------------------------------------------------------------------##
 
 # /*
@@ -41,6 +41,8 @@ import re
 #import numpy as np
 import subprocess
 import itertools
+import gzip
+from optparse import OptionParser
 
 DEF_A_CODE = "None"
 
@@ -60,14 +62,20 @@ bandwidth = 6.4 #16 GB/s / 2.5G cyc/sec = 6.4 bytes/cycle
 overall_cpu_cycles = 0
 application_cpu_cycles = 0
 gran_mode = 0
-cpu_scaling = 1
+cpu_scaling = 1 #This can be used to model CPUs of various speeds
 special_fns = ['fwrite','fread','printf']
+
+#README
+#This script is derived from the original aggregate_costs_gran.py in /archgroup/archtools/postprocess_scripts/accel_select.
+#It has modifications to parse the datareuse file as well. This is hardcoded in the script. Eventually this functionality should be merged back into the original script
+#This can happen as soon as the keyword arguments are improved and the whole things is cleaned up
 
 def usage() :
 	print "Usage:"
-	print "\t" + sys.argv[0] + " [<file>] [printcallees?=<yes|no>] [percentofinst=<0-100>] [mode=<modif|both>] [granmode=<nogran|coarsegran|metric>] [bandwidth_value=<guideline(in GB/s) - 4|8|16|32>] [<callgrind out file>] [software_scaling]"
+	print "\t" + sys.argv[0] + " --file=[<file>] [--printcallees?=<yes|no>] [--percent-of-inst=<0-100>] [mode=<modif|both>] [granmode=<nogran|coarsegran|metric>] [bandwidth_value=<guideline(in GB/s) - 4|8|16|32>] [<callgrind out file>] [software_scaling]"
 	print "\t Continuing with default options - file: sigil.totals.out-1, printcallees=no, displaying functions which occupy at least 0.01% of instructions, mode=modif"
 	print "\t Will only work for single-threaded (serial) runs at the moment"
+	print "This script is derived from the original aggregate_costs_gran.py in /archgroup/archtools/postprocess_scripts/accel_select. For more details see usage() in the script."
 	print ""
 
 class dependency_chain : #Incomplete. Not yet used
@@ -216,6 +224,10 @@ class funcinst :
 		self.input_offload_time = 0
 		self.output_offload_time = 0
 		self.exec_cycles_cpu = 0
+		self.ipcomm_true = 0
+		self.local_true = 0
+		self.local_reusecount = [] #For a breakdown by count of reuse for a stacked bar graph
+		self.ipcomm_reusecount = []
 	
 		if funcinfotemp != 0 :
 			#self.funcinst_list_next = funcinfotemp.funcinst_list
@@ -276,9 +288,11 @@ def readfromfile( filename, funcinfotable ) :
 	local = 0
 	noprod_uniq = 0
 	noprod = 0
-	
-	fh = open( filename, "r" )
-	
+
+	if ".gz" in filename :
+		fh = gzip.open( filename, 'r' )
+	else :
+		fh = open( filename, 'r' )
 	for l in fh :
 		l = l.strip() #Removes leading and ending whitespaces (we should have none in our output)
 
@@ -424,11 +438,28 @@ def print_recurse_cost( funcinst, printcallees_local ) :
 		if (x.flops_incl + x.iops_incl)/float(ops_total) >= percentofinst/float(100) : #Print and remove the unnecessary functions
 			print_recurse_cost ( x, printcallees_local )
 
+def print_recurse_nonuniq( funcinst_node, filepointer ) :		
+	filepointer.write("%50s %-10lu %-10lu %-15.2f %-30s %-10lu %-10lu %-15.2f %-30s\n"%(funcinst_node.function_info.function_name, funcinst_node.ipcomm_uniq, funcinst_node.ipcomm, funcinst_node.ipcomm_true, ",".join(map(str, funcinst_node.ipcomm_reusecount)), funcinst_node.local_uniq, funcinst_node.local, funcinst_node.local_true, ",".join(map(str,funcinst_node.local_reusecount))))
+	#Let us sort the list of callees by FLOP/IOPS? instructions before printing. That way, we'll not print the unimportant ones. We should eventually have a command line option specifying when to stop printing
+	funcinst_node.callees.sort(key=lambda x: (x.flops_incl + x.iops_incl), reverse=True)
+	for x in funcinst_node.callees :
+		if (x.flops_incl + x.iops_incl)/float(ops_total) >= percentofinst/float(100) : #Print and remove the unnecessary functions
+			print_recurse_nonuniq ( x, filepointer )
+
+def calc_recurse_reuse( funcinst_node ) :
+	length_total_local = funcinst_node.local_true
+	length_total_ip = funcinst_node.ipcomm_true
+	for x in funcinst_node.callees :
+		temp_length_total_local, temp_length_total_ip = calc_recurse_reuse ( x )
+		length_total_local += temp_length_total_local
+		length_total_ip += temp_length_total_ip
+	return length_total_local,length_total_ip
+
 def print_only_bottom ( bottom_list ) :
-	
+	global gran_mode
 	for node in bottom_list :
 		#If the metric is inf, then don't print it for now
-		if node.metric == float('inf') :
+		if node.metric == float('inf') and gran_mode > 0:
 			continue
 		if (node.flops_incl + node.iops_incl)/float(ops_total) >= percentofinst/float(100) :
 			#Print and remove the unnecessary functions
@@ -740,7 +771,7 @@ def calculate_metrics ( node ) :
 			node.comp_comm_uniq = "MAX"
 		       	#2. if node.comp_comm_uniq is "MAX" then there is an issue
 			print "Node under main has inclusive communication costs as zero!"
-			sys.exit(1)
+			#sys.exit(1)
 	if(node.comp_comm == 0) :		
 		if (node.ipcomm_incl + node.opcomm_incl) != 0 :
 			node.comp_comm = (node.flops_incl + node.iops_incl)/float(node.ipcomm_incl + node.opcomm_incl)
@@ -748,7 +779,7 @@ def calculate_metrics ( node ) :
 			node.comp_comm = "MAX"
 			#2. if node.comp_comm_uniq is "MAX" then there is an issue
 			print "Node under main has inclusive communication costs as zero!"
-			sys.exit(1)
+			#sys.exit(1)
 
 	node.area = area_regression(node)
 	node.coverage = float(node.iops_incl + node.flops_incl)/ops_total
@@ -777,16 +808,17 @@ def calculate_metrics ( node ) :
 			#node.output_offload_time = node.input_offload_time
 		
 		node.exec_cycles_cpu = node.cg_params[13]/cpu_scaling #
-		if node.input_offload_time + node.output_offload_time > node.exec_cycles_cpu :
+		if (node.input_offload_time + node.output_offload_time > node.exec_cycles_cpu) or not node.exec_cycles_cpu :
 			node.metric = float('inf')
 			return
 		node.breakeven_speedup = node.exec_cycles_cpu / (node.exec_cycles_cpu - node.input_offload_time - node.output_offload_time)
-		node.breakeven_speedup_norm = node.breakeven_speedup / (node.iops_incl + node.flops_incl)
-		node.metric = node.breakeven_speedup_norm * node.area
+		#node.breakeven_speedup_norm = node.breakeven_speedup / (node.iops_incl + node.flops_incl)
+		#node.metric = node.breakeven_speedup_norm * node.area
+		node.metric = node.breakeven_speedup
 			
 def print_node( node, caller_star, append_flag ) :
 
-	print "%50s %s %-10s %-15d %-15d %-15d %-10lu %-10lu %-10lu %-10lu %-10lu %-10lu %-15f %-15f %-15d %-25f %-15d %-15d %-35.20f %-15d %-15d" % (node.function_info.function_name, caller_star, node.num_calls, node.instrs_incl, node.flops_incl, node.iops_incl, node.ipcomm_incl_uniq, node.opcomm_incl_uniq, node.local_incl_uniq, node.ipcomm_incl, node.opcomm_incl, node.local_incl, node.comp_comm_uniq, node.comp_comm, node.exec_cycles_cpu, node.area, node.cg_params[14], node.cg_params[15], node.metric, node.input_offload_time, node.output_offload_time)
+	print "%-10s %-10s %50s %s %-10s %-15d %-15d %-15d %-10lu %-10lu %-10lu %-10lu %-10lu %-10lu %-15f %-15f %-15d %-25f %-15d %-15d %-35.20f %-15d %-15d %-15d %-15d" % (node.function_number, node.funcinst_number, node.function_info.function_name, caller_star, node.num_calls, node.instrs_incl, node.flops_incl, node.iops_incl, node.ipcomm_incl_uniq, node.opcomm_incl_uniq, node.local_incl_uniq, node.ipcomm_incl, node.opcomm_incl, node.local_incl, node.comp_comm_uniq, node.comp_comm, node.exec_cycles_cpu, node.area, node.cg_params[14], node.cg_params[15], node.metric, node.input_offload_time, node.output_offload_time, node.ipcomm_true, node.local_true)
 	
 	#Start putting things into a list for plotting
 	if append_flag :
@@ -796,7 +828,7 @@ def print_node( node, caller_star, append_flag ) :
 
 def print_node_for_gran ( node, caller_star, append_flag ) :
 
-	print "%50s %s %-10s %-15d %-15d %-15d %-10lu %-10lu %-10lu %-10lu %-10lu %-10lu %-15f %-15f %-15d %-25f %-15d %-15d %-35.20f %-15d %-15d" % (node.function_info.function_name, caller_star, node.num_calls, node.instrs_incl, node.flops_incl, node.iops_incl, node.ipcomm_incl_uniq, node.opcomm_incl_uniq, node.local_incl_uniq, node.ipcomm_incl, node.opcomm_incl, node.local_incl, node.comp_comm_uniq, node.comp_comm, node.exec_cycles_cpu, node.area, node.cg_params[14], node.cg_params[15], node.metric, node.input_offload_time, node.output_offload_time)
+	print "%-10s %-10s %50s %s %-10s %-15d %-15d %-15d %-10lu %-10lu %-10lu %-10lu %-10lu %-10lu %-15s %-15s %-15d %-25f %-15d %-15d %-35.20f %-15d %-15d %-15d %-15d" % (node.function_number, node.funcinst_number, node.function_info.function_name, caller_star, node.num_calls, node.instrs_incl, node.flops_incl, node.iops_incl, node.ipcomm_incl_uniq, node.opcomm_incl_uniq, node.local_incl_uniq, node.ipcomm_incl, node.opcomm_incl, node.local_incl, str(node.comp_comm_uniq), str(node.comp_comm), node.exec_cycles_cpu, node.area, node.cg_params[14], node.cg_params[15], node.metric, node.input_offload_time, node.output_offload_time, node.ipcomm_true, node.local_true)
 	
 	#Start putting things into a list for plotting
 	if append_flag :
@@ -858,68 +890,76 @@ def main() :
 	global application_cpu_cycles
 	global gran_mode
 	global cpu_scaling
+	filename_dru = "sigil.datareuse.out-1.gz"
+
+	usage = "usage: %prog [options] file\n Will only work for single-threaded (serial) runs at the moment."
+	parser = OptionParser( usage )
+	#parser.add_option("--file",action="store",type="string",default="sigil.totals.out-1",help='Sigil data file. Default will look for "sigil.totals.out-1"')
+	parser.add_option("--printcallees",action="store_true",default=0,help='If this option is given, when printing the communication and computation costs for nodes, data for callees of functions will also be printed.')
+	parser.add_option("--percent-of-inst", action="store", type="float", dest="percentofinst", default=0.01, help='If the number of instructions executed in a node is less than some percent of total instructions, specified by this command line option, post-processing discards these nodes. Default: 0.01 (%). 0 < value < 100')
+	parser.add_option("--trim-tree", action="store_true", dest="trim_tree", default=0, help='When this option is given, the script can also run the simple demonstrative metric to produce a trimmed control data flow graph with the nodes at the bottom as accelerator candidates. Please see the README, for the exact set of requirements to use this mode.')
+	parser.add_option("--gran-mode",action="store",type="string",default="nogran",help='Applicable only when --trim-tree is given, this option specifies what metric to use when trimming the tree. The available metrics are "nogran" which tells the script not to trim or modify the tree at all, "coarsegran" which favors compute over communication and "metric" which uses the simple demonstrative metric (break-even speedup) mentioned in the paper. Default is "nogran"')
+	parser.add_option("--bandwidth", action="store", type="float", dest="bandwidth", default=16, help='Applicable only when --trim-tree is given. Specifies the bandwidth in Gigabytes/Second of the theoretical bus used to connect a CPU and accelerators. We assume a CPU with contemporary operating frequency of 2.5GHz, and convert the bandwidth to be in bytes/cycle. The default bandwidth is an optimistic 16GB/s in order to conservatively limit the impact of communication')
+	parser.add_option("--cgfile",action="store",type="string",default="callgrind.out.*",help='Applicable only when --trim-tree is given. Specifies the callgrind file to be used for trimming the tree. Please see the README for why this is needed')
+	parser.add_option("--cpu-scaling",action="store",type="int",default=1,help='Applicable only when --trim-tree is given. Specifies a blanket scaling factor by which to scale all calculated cpu cycles. This is intended to roughly model the effect of using more/less powerful CPUs')
 	
-	# stick filename
-	if len( sys.argv ) < 7 :  # no file name/no printcallees?/no percentage
-	    # assume CLG_drwtest
-		filename = "sigil.totals.out-1"
-		printcallees = 0
-		percentofinst = 0.01
-		mode = 0
-		plot = 0
-		usage()
-		gran_mode = 0
-		comp_speedup = 30
-		bandwidth = 6.4
-		#callgrind_filename = "callgrind.out.orig.def"
-		callgrind_filename = "callgrind.out.def-01"
-		cpu_scaling = 1
+	(options, args) = parser.parse_args()
+	if len(args) != 1 :
+		print "Script takes just one positional argument. Please provide Sigil data file."
+		parser.print_help()
+		sys.exit(1)
 	else :
-		filename = sys.argv[1]
-		if "yes" in sys.argv[2] :
-			printcallees = 1
-		elif "no" in sys.argv[2] :
-			printcallees = 0
-		else :
-			print "Unknown print structure for callees! Continuing without printing callees"
-			printcallees = 0
-		percentofinst = float(sys.argv[3]) #Need to check validity of inputs
-		if "modif" in sys.argv[4] :
-			mode = 0
-		elif "orig" in sys.argv[4] :
-			mode = 1
-		elif "both" in sys.argv[4] :
-			mode = 2
-		else :
-			print "Unknown mode!"
-			sys.exit(1)
-		if "nogran" in sys.argv[5] :
+		filename = args[0]
+	# if (options.file == "") :
+		# print "[E] provide valid file"
+		# parser.print_help()
+		# sys.exit(1)
+	# else :
+		# filename = options.file
+	
+	if options.percentofinst < 0 or options.percentofinst > 100 :
+		print "Please provide a valid value for --percent-of-inst. Should be greater than 0 and less than 100 "
+		parser.print_help()
+		sys.exit(1)
+	else :
+		percentofinst = options.percentofinst
+	
+	if options.trim_tree :
+		mode = 2
+		if "nogran" in options.gran_mode :
 			gran_mode = 0
-		elif "coarsegran" in sys.argv[5] :
+		elif "coarsegran" in options.gran_mode :
 			gran_mode = 1
-		elif "metric" in sys.argv[5] :
+		elif "metric" in options.gran_mode :
 			gran_mode = 2
 		else :
-			print "Unknown gran mode!"
+			print "Unknown gran-mode!"
+			parser.print_help()
 			sys.exit(1)
-		if len(sys.argv) > 6 :
-			bandwidth = float(sys.argv[6])/2.5
-		if len(sys.argv) > 7 :
-			callgrind_filename = sys.argv[7]
-		plot = 0
-		if len(sys.argv) > 8 :
-			cpu_scaling = int(sys.argv[8]) #Need to check validity of inputs
-		if len(sys.argv) > 9 :
-			if "yes" in sys.argv[9] :
-				plot = 1
+		if options.bandwidth < 1 or options.bandwidth > 512 :
+			print "Please provide a reasonable/valid bandwidth number in GB/s"
+			parser.print_help()
+			sys.exit(1)
+		else :
+			bandwidth = float(options.bandwidth)/2.5
+		if options.cgfile == "" :
+			print "Please provide a valid Callgrind file"
+			parser.print_help()
+			sys.exit(1)
+		else :
+			callgrind_filename = options.cgfile
+		if options.cpu_scaling > 8 or options.cpu_scaling < 1 : #Would we have a cpu scaling factor of more than 8.
+			print "Please provide a valid cpu scaling number"
+			parser.print_help()
+			sys.exit(1)
+		else :
+			cpu_scaling = options.cpu_scaling
+	else :
+		mode = 0
 	
 	funcinfotable = {} #Declare the funcinfotable so that it can be passed into the constructor for a funcinst. It will do what is necessary
 	funcinstroot = None
 	bottom_list = []
-	
-	if mode == 1 :
-		print "Mode 1 not implemented yet! Please use 0 or 2 for now"
-		sys.exit(1)
 	
 	if mode == 0 or mode == 2 :
 		funcinstroot = readfromfile( filename, funcinfotable )
@@ -938,38 +978,37 @@ def main() :
 		instrs_total = main_node.instrs_incl
 		ops_total = main_node.flops_incl + main_node.iops_incl
 		
-		#ii) Added so that we can compare granularities - only to be used for the granularity experiment
-		print_recurse_cost( main_node, 1 )
-		print ""
-		print ""
-		print "With granularity reduced"
+		if options.printcallees :
+			print_recurse_cost( main_node, 1 )
+		else :
+			print_recurse_cost( main_node, 0 )
+		
+		if mode == 2 : #For granularity experiment
+			print ""
+			print ""
+			print "Trimming tree....."
 
-		#1. Next lets do the entire calltree for inclusive costs
-		cg_anno = "perl /archgroup/archtools/Profilers/valgrind-3.7_original/callgrind/callgrind_annotate --inclusive=yes --threshold=100 " + callgrind_filename
-		temp = subprocess.Popen( cg_anno, shell=True, stdout=subprocess.PIPE )
-		for l in temp.stdout :
-			if re.match( r'.*:\w+', l ) :
-				search_for_l_in_cg ( l, funcinfotable, 1 )
-		
-		#Done with things for granularity experiment
-		
-		#Reduce tree by granularity
-		#iii) Reduce the number of nodes by granularity for each callee of main. Could modify this to include main
-		for x in main_node.callees :
-			reduce_tree_bygran ( x, bottom_list )
-		
-		#Now let us parse an original run of programs using Callgrind and (first call to generate it, then run callgrind_annotate and parse the output. Look for :function_name. If found, then thats our guy. Make an execution time estimation calculation for him. Per our original assumption, there should be no repeated names anyway. For each line we'll need to compare against the Ir to see if its the right line. They need to match approx, so if there are multiple call instances, try to see if the difference divided by one of them is less than 0.01. If there are too many funcinstances, sort th em by instructions and then try only the first few
-		
-		bottom_list.sort(key=lambda x: (x.flops_incl + x.iops_incl), reverse=True)
-		
-		if mode == 2 :
-			#1. Lets do the bottom_list first, where we need inclusive costs
-			#cg_anno = "/archgroup/archtools/Profilers/valgrind-3.7_original/callgrind/callgrind_annotate --inclusive=yes --threshold=100 callgrind.out.orig.def"
-			#temp = subprocess.Popen( cg_anno, shell=True, stdout=subprocess.PIPE )
-			#for l in temp.stdout :
-			#	if re.match( r'.*:\w+', l ) :
-			#		search_for_l_in_bottom_list ( l, bottom_list )
+			#Now let us parse an original run of programs using Callgrind and (first call to generate it, then run callgrind_annotate and parse the output.
+			#Look for :function_name. If found, then thats our guy. Make an execution time estimation calculation for him.
+			#Per our original assumption, there should be no repeated names anyway. For each line we'll need to compare against the Ir to see if its the right line.
+			#They need to match approx, so if there are multiple call instances, try to see if the difference divided by one of them is less than 0.01.
+			#If there are too many funcinstances, sort them by instructions and then try only the first few
+
+			#1. Next lets do the entire calltree for inclusive costs
+			cg_anno = "perl /archgroup/archtools/Profilers/valgrind-3.7_original/callgrind/callgrind_annotate --inclusive=yes --threshold=100 " + callgrind_filename
+			temp = subprocess.Popen( cg_anno, shell=True, stdout=subprocess.PIPE )
+			for l in temp.stdout :
+				if re.match( r'.*:\w+', l ) :
+					search_for_l_in_cg ( l, funcinfotable, 1 )
 			
+			#Reduce tree by granularity
+			#iii) Reduce the number of nodes by granularity for each callee of main. Could modify this to include main
+			for x in main_node.callees :
+				reduce_tree_bygran ( x, bottom_list )
+			
+			bottom_list.sort(key=lambda x: x.metric)
+			
+		
 			#2. Next lets do the rest of the calltree where self costs are needed
 			cg_anno = "perl /archgroup/archtools/Profilers/valgrind-3.7_original/callgrind/callgrind_annotate --threshold=100 " + callgrind_filename
 			temp = subprocess.Popen( cg_anno, shell=True, stdout=subprocess.PIPE )
@@ -977,22 +1016,14 @@ def main() :
 				if re.match( r'.*:\w+', l ) :
 					search_for_l_in_cg ( l, funcinfotable, 0 )
 
-		print "%-50s %s %-10s %-15s %-15s %-15s %-10s %-10s %-10s %-10s %-10s %-10s %-15s %-15s %-15s %-25s %-15s %-15s %-35s %-15s %-15s" % ("Function name", " ", "Numcalls", "Instrs", "Flops", "Iops", "Ipcomm_uq", "Opcomm_uq", "Local_uq", "Ipcomm", "Opcomm", "Local", "Comp_Comm_uniq", "Comp_Comm", "Est. Cyc", "Est. Area", "Est. Dlmr time", "Est. Dlmw time", "Der. metr","ip_offload","op_offload")
-		print ""
-		final_calc_print_exectime ( bottom_list )
-				
-		##Now we can print, or plot or both
-		if printcallees :
-			print_recurse_cost( main_node, 1 )
-		else :
-			print_only_bottom ( bottom_list )
-		
-		if plot :
-			plt.scatter( comm, comp, s=10, c="b", alpha=0.5, marker=r'o', label="Function" )
-			plt.xlabel("Communication (bytes)")
-			plt.ylabel("Computation (ops)")
-			plt.legend(loc=2)
-			plt.savefig('plot.pdf')
-			plt.show()
+			print "%-10s %-10s %-50s %s %-10s %-15s %-15s %-15s %-10s %-10s %-10s %-10s %-10s %-10s %-15s %-15s %-15s %-25s %-15s %-15s %-35s %-15s %-15s %15s %15s" % ("Func num", "Func Inst","Function name", " ", "Numcalls", "Instrs", "Flops", "Iops", "Ipcomm_uq", "Opcomm_uq", "Local_uq", "Ipcomm", "Opcomm", "Local", "Comp_Comm_uniq", "Comp_Comm", "Est. Cyc", "Est. Area", "Est. Dlmr time", "Est. Dlmw time", "Der. metr","ip_offload","op_offload", "data-ru-ipcomm", "data-ru-local")
+			print ""
+			final_calc_print_exectime ( bottom_list )
+
+			##Now we can print, or plot or both
+			if options.printcallees :
+				print_recurse_cost( main_node, 1 )
+			else :
+				print_only_bottom ( bottom_list )
 
 main()

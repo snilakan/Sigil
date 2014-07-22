@@ -1741,13 +1741,12 @@ void CLG_(init_eventsets)()
 	CLG_(register_event_group2)(EG_SYS, "sysCount", "sysTime");
 
     /*Added to count flops and iops*/
-    //Ideally we need a command line option for this, but in my hack I can do without that
-    CLG_(register_event_group2)(EG_OPS, "flops", "iops");
-
-    // event set used as base for instruction self cost
-    // CLG_(sets).base = CLG_(get_event_set2)(EG_USE, EG_IR); // Original - Sid
-    CLG_(sets).base = CLG_(get_event_set3)(EG_USE, EG_IR, EG_OPS);
-
+      //Ideally we need a command line option for this, but in my hack I can do without that
+      CLG_(register_event_group2)(EG_OPS, "flops", "iops");
+      
+      // event set used as base for instruction self cost
+      // CLG_(sets).base = CLG_(get_event_set2)(EG_USE, EG_IR); // Original - Sid
+      CLG_(sets).base = CLG_(get_event_set3)(EG_USE, EG_IR, EG_OPS);
     /*Done addition by Sid*/
 
     // event set comprising all event groups, used for inclusive cost
@@ -1790,8 +1789,10 @@ void CLG_(init_eventsets)()
     CLG_(append_event)(CLG_(dumpmap), "sysCount");
     CLG_(append_event)(CLG_(dumpmap), "sysTime");
     /*Added to count flops and iops*/
-    CLG_(append_event)(CLG_(dumpmap), "flops");
-    CLG_(append_event)(CLG_(dumpmap), "iops");
+    if (CLG_(clo).sigil_on){
+      CLG_(append_event)(CLG_(dumpmap), "flops");
+      CLG_(append_event)(CLG_(dumpmap), "iops");
+    }
     /*Done addition by Sid*/
 }
 
