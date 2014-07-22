@@ -51,6 +51,9 @@ The documentation should also contain a list of command line options that can be
 Callgrind's command line options have been extended to i) enable Sigil and ii) give Sigil command line options
 Sigil should be compatible with any and all of Callgrind's own command line options as well.
 
+The only (highly) recommended modification to the application you wish to profile, is compiling it with debugging symbols. i.e. -g.
+This is recommended for stock Callgrind as well.
+
 Sigil is invoked as follows:
 valgrind --tool=callgrind <Callgrind command line options> --sigil-tool=yes <Sigil command line options> <user program>
 
