@@ -61,7 +61,8 @@ If you prefered not to 'make install' Valgrind, and built Valgrind using just th
 In such a case, the command takes the form:
 <build location>/vg-in-place --tool=callgrind <Callgrind command line options> --sigil-tool=yes <Sigil command line options> <user program>
 
-As with the Callgrind tool itself, Sigil dumps its data in the folder where the command was run.
+As with the Callgrind tool itself, Sigil dumps its data in the folder where the command was run. Please see the list of supported options and the NOTES
+on the restrictions of their use.
 
 
 ***
@@ -81,7 +82,7 @@ If an application has very large depth in the calltree, the memory needed by Cal
 
 
 ***
-Here are the list of command-line arguments to Sigil and what they mean:
+Here are the list of command-line arguments to Sigil and what they mean. Please also see the NOTES below:
 
 --sigil-tool - Enable sigil tool or run stock callgrind? Options are "yes" or "no". Default: "no" which runs just the stock Callgrind.
 
@@ -113,6 +114,7 @@ Currently, it is also not possible to use all combinations of the above command 
 Especially, memory intensive options should not be used together. 
 For example, "--drw-events" and "--drw-datareuse" cannot and should not be used together.
 Since "--drw-syscalltracing" also adds memory overhead, use sparingly in combination with the other options.
+Finally, it is not recommended to turn on function-level profiling for multi-threaded programs, as that could be very memory intensive and may not necessarily provide useful information.
 ***
 
 
