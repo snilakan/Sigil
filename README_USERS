@@ -149,7 +149,7 @@ The 'ls -l' can be replaced with your own program and it should work.
 
 
 **********************************************************
-What programs can be profiled by the tool? (Restrictions)
+What programs can be profiled by the tool? (Restrictions/Known issues)
 
 As the tool incurs slowdown already, some restrictions were placed purposefully on the user program, 
 so that writing optimized code would be somewhat easier and the memory behavior of the tool is more determinate.
