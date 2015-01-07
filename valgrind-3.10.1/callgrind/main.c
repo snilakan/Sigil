@@ -92,7 +92,7 @@
 
 #include "cg_branchpred.c"
 
-#include "main.c"
+#include "sigil.h"
 
 /*------------------------------------------------------------*/
 /*--- Global variables                                     ---*/
