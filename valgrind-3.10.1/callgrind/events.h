@@ -93,9 +93,9 @@ struct _EventSet {
 /* Same event set is returned when requesting same event groups */
 EventSet* CLG_(get_event_set)(Int id);
 EventSet* CLG_(get_event_set2)(Int id1, Int id2);
+EventSet* CLG_(get_event_set3)(Int id1, Int id2, Int id3);
 EventSet* CLG_(add_event_group)(EventSet*, Int id);
 EventSet* CLG_(add_event_group2)(EventSet*, Int id1, Int id2);
-EventSet* CLG_(add_event_group3)(EventSet*, Int id1, Int id2, Int id3);
 EventSet* CLG_(add_event_set)(EventSet*, EventSet*);
 
 
