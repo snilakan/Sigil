@@ -1,0 +1,4 @@
+1. Run sigil_setup.sh 
+2. Compile your source file
+3. Change sigil_path and exe_file_path.
+4. Use sigil_test_example.sh to run  sigil on your program. 
