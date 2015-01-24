@@ -64,6 +64,7 @@ application_cpu_cycles = 0
 gran_mode = 0
 cpu_scaling = 1 #This can be used to model CPUs of various speeds
 special_fns = ['fwrite','fread','printf']
+printexclcosts = 0
 
 #README
 #This script is derived from the original aggregate_costs_gran.py in /archgroup/archtools/postprocess_scripts/accel_select.
@@ -423,14 +424,20 @@ def readfromfile( filename, funcinfotable ) :
 def print_recurse_cost( funcinst, printcallees_local ) :		
 	
 	#Added because when we run with --toggle-collect=main, some funcinst instances have their "function_info" variables as empty (0x0), because I suppose instrumentation does not happen for them, but funcinsts get created for them as their children may get created. We should actually be allowed to skip this and return without printing anything
-	print_node ( funcinst, "*", 1 )
+	if printexclcosts :
+		print_node_exclcosts( funcinst, "*", 1 )
+	else :
+		print_node ( funcinst, "*", 1 )
   
 	#Let us sort the list of callees by FLOP/IOPS? instructions before printing. That way, we'll not print the unimportant ones. We should eventually have a command line option specifying when to stop printing
 	funcinst.callees.sort(key=lambda x: (x.flops_incl + x.iops_incl), reverse=True)
   
 	if printcallees_local :
 		for x in funcinst.callees :
-			print_node ( x, "<", 0)
+			if printexclcosts :
+				print_node_exclcosts( x, "<", 0 )
+			else :
+				print_node ( x, "<", 0)
 		print ""
 	
 	for x in funcinst.callees :
@@ -463,7 +470,10 @@ def print_only_bottom ( bottom_list ) :
 			continue
 		if (node.flops_incl + node.iops_incl)/float(ops_total) >= percentofinst/float(100) :
 			#Print and remove the unnecessary functions
-			print_node_for_gran ( node, "*", 1 )
+			if printexclcosts :
+				print_node_exclcosts ( node, "*", 1 )
+			else :
+				print_node_for_gran ( node, "*", 1 )
 		
 def check_callees_for_funcinst ( funcinst, consumerfuncinfo_ptr ) :
 	'''This function simply checks for the funcinst described in consumerfuncinfo
@@ -591,7 +601,7 @@ def compare_callees_compcomm ( node, given_node ) :
 	for x in node.callees :
 		calculate_metrics ( x ) #Also calculate area here itself
 		#3. Compare x.comp_comm_uniq costs and return 0 if something is found higher than node's comp_comm_uniq
-		return_0_flag = compare_granularity_metric ( x, node ) #Will return 1 if metric is lesser for x than node
+		return_0_flag = compare_granularity_metric ( x, given_node ) #Will return 1 if metric is lesser for x than node
 		if return_0_flag :
 			return 0
 	
@@ -770,7 +780,7 @@ def calculate_metrics ( node ) :
 		else :
 			node.comp_comm_uniq = "MAX"
 		       	#2. if node.comp_comm_uniq is "MAX" then there is an issue
-			print "Node under main has inclusive communication costs as zero!"
+			print "Node under main has inclusive communication costs as zero! Node: "+node.function_info.function_name
 			#sys.exit(1)
 	if(node.comp_comm == 0) :		
 		if (node.ipcomm_incl + node.opcomm_incl) != 0 :
@@ -778,7 +788,7 @@ def calculate_metrics ( node ) :
 		else :
 			node.comp_comm = "MAX"
 			#2. if node.comp_comm_uniq is "MAX" then there is an issue
-			print "Node under main has inclusive communication costs as zero!"
+			print "Node under main has inclusive communication costs as zero! Node: "+node.function_info.function_name
 			#sys.exit(1)
 
 	node.area = area_regression(node)
@@ -818,6 +828,9 @@ def calculate_metrics ( node ) :
 			
 def print_node( node, caller_star, append_flag ) :
 
+	if node.comp_comm_uniq == "MAX" :
+		 node.comp_comm = float('inf')
+		 node.comp_comm_uniq = float('inf')
 	print "%-10s %-10s %50s %s %-10s %-15d %-15d %-15d %-10lu %-10lu %-10lu %-10lu %-10lu %-10lu %-15f %-15f %-15d %-25f %-15d %-15d %-35.20f %-15d %-15d %-15d %-15d" % (node.function_number, node.funcinst_number, node.function_info.function_name, caller_star, node.num_calls, node.instrs_incl, node.flops_incl, node.iops_incl, node.ipcomm_incl_uniq, node.opcomm_incl_uniq, node.local_incl_uniq, node.ipcomm_incl, node.opcomm_incl, node.local_incl, node.comp_comm_uniq, node.comp_comm, node.exec_cycles_cpu, node.area, node.cg_params[14], node.cg_params[15], node.metric, node.input_offload_time, node.output_offload_time, node.ipcomm_true, node.local_true)
 	
 	#Start putting things into a list for plotting
@@ -825,6 +838,13 @@ def print_node( node, caller_star, append_flag ) :
 		comm.append( node.ipcomm_incl_uniq + node.opcomm_incl_uniq )
 		comp.append( node.flops_incl + node.iops_incl )
 		label.append( node.function_info.function_name )
+
+def print_node_exclcosts( node, caller_star, append_flag ) :
+
+	if node.comp_comm_uniq == "MAX" :
+		 node.comp_comm = float('inf')
+		 node.comp_comm_uniq = float('inf')
+	print "%-10s %-10s %50s %s %-10s %-15d %-15d %-15d %-10lu %-10lu %-10lu %-10lu %-10lu %-10lu %-15f %-15f %-15d %-25f %-15d %-15d %-35.20f %-15d %-15d %-15d %-15d" % (node.function_number, node.funcinst_number, node.function_info.function_name, caller_star, node.num_calls, node.instrs, node.flops, node.iops, node.ipcomm_uniq, node.opcomm_uniq, node.local_uniq, node.ipcomm, node.opcomm, node.local, node.comp_comm_uniq, node.comp_comm, node.exec_cycles_cpu, node.area, node.cg_params[14], node.cg_params[15], node.metric, node.input_offload_time, node.output_offload_time, node.ipcomm_true, node.local_true)
 
 def print_node_for_gran ( node, caller_star, append_flag ) :
 
@@ -890,12 +910,14 @@ def main() :
 	global application_cpu_cycles
 	global gran_mode
 	global cpu_scaling
+	global printexclcosts
 	filename_dru = "sigil.datareuse.out-1.gz"
 
 	usage = "usage: %prog [options] file\n Will only work for single-threaded (serial) runs at the moment."
 	parser = OptionParser( usage )
 	#parser.add_option("--file",action="store",type="string",default="sigil.totals.out-1",help='Sigil data file. Default will look for "sigil.totals.out-1"')
 	parser.add_option("--printcallees",action="store_true",default=0,help='If this option is given, when printing the communication and computation costs for nodes, data for callees of functions will also be printed.')
+	parser.add_option("--printexclcosts",action="store_true",default=0,help='You have reached a hidden option! Use at your own risk. Provides exclusive costs instead of inclusive costs when printing things. Not fully tested. By default it is not on.')
 	parser.add_option("--percent-of-inst", action="store", type="float", dest="percentofinst", default=0.01, help='If the number of instructions executed in a node is less than some percent of total instructions, specified by this command line option, post-processing discards these nodes. Default: 0.01 (%). 0 < value < 100')
 	parser.add_option("--trim-tree", action="store_true", dest="trim_tree", default=0, help='When this option is given, the script can also run the simple demonstrative metric to produce a trimmed control data flow graph with the nodes at the bottom as accelerator candidates. Please see the README, for the exact set of requirements to use this mode.')
 	parser.add_option("--gran-mode",action="store",type="string",default="nogran",help='Applicable only when --trim-tree is given, this option specifies what metric to use when trimming the tree. The available metrics are "nogran" which tells the script not to trim or modify the tree at all, "coarsegran" which favors compute over communication and "metric" which uses the simple demonstrative metric (break-even speedup) mentioned in the paper. Default is "nogran"')
@@ -956,6 +978,8 @@ def main() :
 			cpu_scaling = options.cpu_scaling
 	else :
 		mode = 0
+	if options.printexclcosts :
+		printexclcosts = 1
 	
 	funcinfotable = {} #Declare the funcinfotable so that it can be passed into the constructor for a funcinst. It will do what is necessary
 	funcinstroot = None
