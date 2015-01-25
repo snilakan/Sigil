@@ -24,9 +24,8 @@ fi
 ####################################
 # Build valgrind 3.10.1 with sigil #
 ####################################
-pushd $sigil_path/valgrind-3.10.1/ > /dev/null
+cd $sigil_path/valgrind-3.10.1/
 ./autogen.sh && ./configure && make -j6 --quiet
-popd
 if ! [ $? == 0 ]
 then
 	echo "$lineheader ERROR| Sigil build failed!"
