@@ -1,44 +1,91 @@
-This README has instructions on how to run the post processing script.
-The postprocessing script is written in Python and uses the Optparse module. Thus it will need a python installation with basic packages to function.
-It accepts one positional argument (necessary argument), the sigil data output file. The remaining arguments are implemented as command line options with programmed defaults.
-To see a list of command line options and their defaults use the --help or -h option. 
-The --trim-tree option has some special considerations discussed in the next section "Running the algorithm to trim the tree".
-The simplest example that should work is to run without any options, and only providing the sigil data file.
+This README has instructions on the post processing script:
+   aggregate_costs_gran.py  
 
-The script prints the inclusive computation and communication costs in all nodes in the tree starting from the top of the tree and can optionally provide the computation (in operations) and communication (in bytes) seen by all the callees of a node as well.
-The communication data for a particular line has a "*" in it, while the data for its callees has the "<" character in it.
+--------------------
+===== Overview =====
+--------------------
+The postprocessing script is written in Python(2.x) and uses the Optparse 
+module. Thus it will need a python installation with basic packages.
+
+It accepts one positional argument (necessary argument), the sigil data 
+output file. 
+
+Use the --help option to see a command line options and their defaults.
+The simplest example that should work is to run without any options, 
+and only providing the sigil data file.
+
+Note: The script can take up to several hours to run for bigger applications.
+
+-------------------------------
+===== Interpreting Output =====
+-------------------------------
+The script prints the inclusive computation and communication costs in all 
+nodes in the tree starting from the top of the tree and can optionally 
+provide the computation (in operations) and communication (in bytes) seen 
+by all the callees of a node as well.
+
+The communication data for a particular line has a "*" in it, while the data
+for its callees has the "<" character in it.
 
 Each row represents data for a node.
 Some of the important columns are explained below :
-1. Numcalls - number of calls to that node
-2. Instructions - number of instructions executed in that node
-3. Flops - Total Floating Point operations executed in that node
-4. Iops - Total Integer operations executed in that node
-5. Ipcomm_uq - The unique input communication seen by that node (inclusive). Please see the Sigil README_USERS and the paper to understand what this metric represents and how it is calculated.
-6. Opcomm_uq - The unique output communication seen by that node (inclusive). Please see the Sigil README_USERS and the paper to understand what this metric represents and how it is calculated.
-7. Local_uq - The unique local communication seen by that node (inclusive). Please see the Sigil README_USERS and the paper to understand what this metric represents and how it is calculated.
-8. Ipcomm - The total input communication seen by that node (inclusive). Please see the Sigil README_USERS and the paper to understand what this metric represents and how it is calculated.
-9. Opcomm - The total output communication seen by that node (inclusive). Please see the Sigil README_USERS and the paper to understand what this metric represents and how it is calculated.
-10.Local - The total local communication seen by that node (inclusive). Please see the Sigil README_USERS and the paper to understand what this metric represents and how it is calculated.
-11.Comp_Comm_uniq - The ratio of computation to unique communication. This represents the work done per byte of true input data transferred. Higher ratios are more indicative of a hotspot.
+   1. Numcalls      - number of calls to that node
+   2. Instructions  - number of instructions executed in that node
+   3. Flops         - total Floating Point operations executed in that node
+   4. Iops          - total Integer operations executed in that node
+   5. Ipcomm_uq     - unique input communication seen by that node (inclusive)
+   6. Opcomm_uq     - unique output communication seen by that node (inclusive)
+   7. Local_uq      - unique local communication seen by that node (inclusive)
+   8. Ipcomm        - total input communication seen by that node (inclusive)
+   9. Opcomm        - total output communication seen by that node (inclusive)
+   10.Local         - total local communication seen by that node (inclusive)
 
-Note: The script can take up to several hours to run for bigger applications. 
+   11.Comp_Comm_uniq- The ratio of computation to unique communication. 
+                      This represents the work done per byte of true input 
+                      data transferred. Higher ratios are more indicative 
+                      of a hotspot.
 
+Please see the Sigil documentation and the Sigil paper to understand what 
+these metrics represent and how they are calculated.
 
-***********************************************
-Running the algorithm to trim the tree:
+-----------------------------------
+===== Tree trimming algorithm =====
+-----------------------------------
+Some more important columns are populated after trimming the tree.
+These are the breakeven-speedup (Der. Metr) and software cycles (Est. Cyc)
 
-To use the demonstrative algorithm in the paper to find accelerator candidates, use the --trim-tree option with the script. 
-To use this option, Sigil must be run with specific command line options. The --trim-tree option also requires results from Callgrind and the path to the Callgrind post processing script.
+To use the demonstrative algorithm in the paper to find accelerator candidates,
+use the '--trim-tree' option with the script. 
+
+The '--trim-tree' option also requires results from Callgrind and the path 
+to the Callgrind post processing script.
+
 The requirements are listed below:
 
-1. Callgrind must be run with "--tool=callgrind --cache-sim=yes --branch-sim=yes"
-2. Sigil must be run with "--tool=callgrind --separate-callers=<X> --cache-sim=yes --branch-sim=yes --drw-func=yes". This produces a callgrind output file as well, which should not be used with the script.
-3. Provide the callgrind output file that is generated from 1. With the --cgfile option to the script. By default, the script looks for "callgrind.out.*" which could point to multiple files within the folder.
-If you delete the callgrind output file produced by 2., then you might get away with using the default value for --cgfile.
-4. Find the two lines in the script that say: 'cg_anno = "perl /archgroup/archtools/Profilers/valgrind-3.7_original/callgrind/callgrind_annotate --inclusive=yes --threshold=100 " + callgrind_filename'
-Edit the lines to replace "/archgroup/archtools/Profilers/valgrind-3.7_original/callgrind/callgrind_annotate" with the full path to the callgrind_annotate perl script in the Callgrind folder.
-5. Run the script as follows: <path_to_script>/aggregate_costs_gran.py sigil.totals.out-1 --trim-tree --cgfile=<callgrind out file> --gran-mode=metric. There are more options that can be used, please run the script with --help to see the options and their description.
+   1. Sigil must be run with 
+         '--tool=callgrind --separate-callers=<X> --cache-sim=yes --branch-sim=yes --drw-func=yes' 
+      This produces a callgrind output file as well, which should 
+      not be used with the script.
 
-Some more important columns are populated after trimming the tree.
-These are the breakeven-speedup (under Der. Metr) and software cycles (Est. Cyc).
+   2. Callgrind must be run separately with 
+         '--tool=callgrind --cache-sim=yes --branch-sim=yes'
+
+   3. Provide the callgrind output file that is generated from 2. with 
+      the --cgfile option to the script. By default, the script looks for 
+      "callgrind.out.*" which could point to multiple files within the folder.
+
+      If you delete the callgrind output file produced by 1., 
+      then you might get away with using the default value for --cgfile.
+
+   4. Find the two lines in the script that say: 
+         'cg_anno = "perl /archgroup/archtools/Profilers/valgrind-3.7_original/callgrind/callgrind_annotate --inclusive=yes --threshold=100 " + callgrind_filename'
+      Edit the lines to replace 
+         "/archgroup/archtools/Profilers/valgrind-3.7_original/callgrind/callgrind_annotate" 
+      with the full path to the callgrind_annotate perl script in the 
+      Callgrind folder.
+
+   5. Run the script as follows: 
+         <path_to_script>/aggregate_costs_gran.py sigil.totals.out-1 --trim-tree --cgfile=<callgrind out file> --gran-mode=metric 
+
+      There are more options that can be used, please run the script 
+      with --help to see the options and their description.

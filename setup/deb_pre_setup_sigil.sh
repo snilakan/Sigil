@@ -48,8 +48,12 @@ then
   apt-get install python-dev;
 fi
 
-python -V
+if [[ ! $(python -V 2>&1 | grep "Python 2") ]]
+then
+  python -V
+  echo "WARNING!!!"
+  echo "Post processing script only works with python 2.x"
+fi
 
-echo "post processing script only works with python 2.x"
 
 fi

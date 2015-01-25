@@ -1,0 +1,151 @@
+        888       888888             888      d8b         
+        888   o   888888             888      Y8P         
+        888  d8b  888888             888                  
+        888 d888b 88888888b.  8888b. 888888   888.d8888b  
+        888d88888b888888 "88b    "88b888      88888K      
+        88888P Y88888888  888.d888888888      888"Y8888b. 
+        8888P   Y8888888  888888  888Y88b.    888     X88 
+        888P     Y888888  888"Y888888 "Y888   888 88888P' 
+                                                          
+                                                          
+                                                          
+         .d8888b. d8b        d8b888    .d8888b.  
+        d88P  Y88bY8P        Y8P888   d88P  Y88b 
+        Y88b.                   888        .d88P 
+         "Y888b.  888 .d88b. 888888      .d88P"  
+            "Y88b.888d88P"88b888888      888"    
+              "888888888  888888888      888     
+        Y88b  d88P888Y88b 888888888              
+         "Y8888P" 888 "Y88888888888      888     
+                          888                    
+                     Y8b d88P                    
+                      "Y88P"                     
+        
+
+--------------------
+===== Overview =====
+--------------------
+
+Sigil is a Valgrind tool designed to help the HW/SW partitioning problem.
+By analyzing a user's unmodified binary executable, Sigil generates callgraph
+and dependency data. This data identifies the 'true cost' of your functions.
+We include sample post-processing scripts to demonstrate the utility of this
+information.
+
+The tool is implemented as a run-time profiler and works on the 
+application binary directly to produce platform-independent data. It does 
+not need any source code changes or any prior knowledge of the application. 
+
+For a better grasp on Sigil, please read the Valgrind, Cachegrind,
+and Callgrind overviews.
+
+Additionally please see our 'docs' folder for more information.
+
+
+--------------------------
+===== Building Sigil =====
+--------------------------
+
+We offer a setup script to automatically detect missing package
+dependencies and build the tool. 
+
+   cd setup
+   ./deb_pre_setup_sigil.sh (if applicable)
+   ./setup_sigil.sh
+
+If you would rather build the tool manually, you can run the following:
+   
+   cd valgrind-3.10.1
+   ./autogen.sh
+   ./configure
+   ./make check
+
+
+-------------------------
+===== Running Sigil =====
+-------------------------
+
+An included script will run sigil with the most common options. Note that
+the user must first edit this script with some default paths to let it know
+where is the sigil directory. Make sure your binary is compiled with debug
+flags.
+
+   ./run_sigil.sh <user binary>
+
+This results in a file called "sigil.total.out.<thread_number>"
+For example if I wanted to get sigil results for the 'ls' command:
+
+   ./run_sigil.sh ls -lah
+
+However my results would probably not be very useful because 'ls' was probably
+not compiled with debug flags
+
+More information about running the tool and its options can be found in the
+provided documentation.
+
+
+--------------------------
+===== Postprocessing =====
+--------------------------
+
+Sigil's raw output is not very readable and must be post processed.
+
+A Python post-processing script is available to run through the results 
+and present them in a more readable format. This is found in the accompanying
+'postprocessing' folder. The postprocessing script comes with its own README.
+
+   postprocessing/aggregate_costs_gran.py <inputfile> <printcallees?=yes|no> <percentofinst=0-100>
+
+The post-processing script prints inclusive costs of each function in each
+unique context, in a calltree fashion similar to callgrind itself. 
+
+See the documentation for more information
+
+
+--------------------------
+===== Restrictions =====
+--------------------------
+
+Sigil is a Valgrind tool, and as such, is 
+only officially supported in LINUX.
+
+What programs can be profiled by the tool? (Restrictions/Known issues)
+
+As the tool incurs slowdown already, some restrictions were placed
+purposefully on the user program, so that writing optimized code would be 
+somewhat easier and the memory behavior of the tool is more determinate.
+
+The restrictions are as follows:
+
+   1. Each function name must be unique across the application. 
+      The user program must not have overloaded function. This 
+      can cause the post-processing script to get confused.
+      We are working on a solution to this problem.
+
+   2. The maximum depth of the calltree in the user program (after main) 
+      must not exceed the <number> - 10, specified in the
+      --separate-callers=<number> option
+
+      The default for <number> in the wrapper script is 400, but it can 
+      simply be the maximum depth of the calltree in the user program + 10. 
+      The additional 10 is just a buffer for the functions before main() 
+      and after exit().
+
+   3. The number of callees for each function in the user program should at 
+      most be 1000. (These are hardcoded)
+
+   4. The number of functions in the program must not exceed 10,000. 
+      (Also hardcoded)
+
+   5. Sigil cannot handle address values above 256G currently. 
+
+   6. Applications with a large memory footprint can cause Sigil to exceed 
+      memory bounds set by Valgrind or the system. 
+
+      If such an error is encountered, we recommend running with smaller 
+      input sets.
+
+   7. Applications with very large call depth can also cause Sigil to exceed 
+      memory bounds. Currently, there is no workaround for this, but we are 
+      working on a long term solution that could mean tighter integration 
+      with Callgrind.

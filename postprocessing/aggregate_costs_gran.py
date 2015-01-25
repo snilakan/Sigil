@@ -1019,7 +1019,7 @@ def main() :
 			#If there are too many funcinstances, sort them by instructions and then try only the first few
 
 			#1. Next lets do the entire calltree for inclusive costs
-			cg_anno = "perl /home/DREXEL/mdl45/SigilWork/sigil_make_clean/valgrind-3.10.1/callgrind/callgrind_annotate --inclusive=yes --threshold=100 " + callgrind_filename
+			cg_anno = "perl /home/DREXEL/mdl45/SigilWork/sigil_clone/valgrind-3.10.1/callgrind/callgrind_annotate --inclusive=yes --threshold=100 " + callgrind_filename
 			temp = subprocess.Popen( cg_anno, shell=True, stdout=subprocess.PIPE )
 			for l in temp.stdout :
 				if re.match( r'.*:\w+', l ) :
@@ -1034,7 +1034,7 @@ def main() :
 			
 		
 			#2. Next lets do the rest of the calltree where self costs are needed
-			cg_anno = "perl /home/DREXEL/mdl45/SigilWork/sigil_make_clean/valgrind-3.10.1/callgrind/callgrind_annotate --threshold=100 " + callgrind_filename
+			cg_anno = "perl /home/DREXEL/mdl45/SigilWork/sigil_clone/valgrind-3.10.1/callgrind/callgrind_annotate --threshold=100 " + callgrind_filename
 			temp = subprocess.Popen( cg_anno, shell=True, stdout=subprocess.PIPE )
 			for l in temp.stdout :
 				if re.match( r'.*:\w+', l ) :
