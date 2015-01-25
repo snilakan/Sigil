@@ -31,6 +31,7 @@ then
 	echo "$lineheader ERROR| Sigil build failed!"
 	exit
 fi
+echo "$lineheader Sigil build complete!"
 
 ################################
 # Modify post processing paths #
@@ -41,11 +42,11 @@ oldvalgrind="valgrind-3.7"
 
 callgrind_annotate_old="/archgroup/archtools/Profilers/$oldvalgrind""_original/"
 callgrind_annotate_new="$sigil_path/$valgrind/"
-sed -i s|$callgrind_annotate_old|$callgrind_annotate_new| $postprocessing_path
+sed -i "s|$callgrind_annotate_old|$callgrind_annotate_new|" $postprocessing_path
 
 callgrind_annotate_inclusive_old="/archgroup/archtools/Profilers/$oldvalgrind""_original/"
 callgrind_annotate_inclusive_new="$sigil_path/$valgrind/"
-sed -i s|$callgrind_annotate_inclusive_old|$callgrind_annotate_inclusive_new| $postprocessing_path
+sed -i "s|$callgrind_annotate_inclusive_old|$callgrind_annotate_inclusive_new|" $postprocessing_path
 
 echo "$lineheader Sigil setup complete"
 
