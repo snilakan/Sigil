@@ -47,7 +47,7 @@ noinst_HEADERS = \
 	costs.h \
 	events.h \
 	global.h \
-  sigil.h
+	sigil.h
 
 #----------------------------------------------------------------------------
 # callgrind-<platform>
@@ -73,7 +73,7 @@ CALLGRIND_SOURCES_COMMON = \
 	main.c \
 	sim.c \
 	threads.c \
-  sigil.c
+	sigil.c
 
 # We sneakily include "cg_branchpred.c" and "cg_arch.c" from cachegrind
 CALLGRIND_CFLAGS_COMMON = -I$(top_srcdir)/cachegrind

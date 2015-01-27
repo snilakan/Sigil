@@ -1,0 +1,3 @@
+prog: sigilTest1
+vgopts: --sigil-tool=yes --cache-sim=yes --drw-func=yes --separate-callers=100 --drw-syscalltracing=yes
+cleanup: rm callgrind.out.* sigil.totals.*

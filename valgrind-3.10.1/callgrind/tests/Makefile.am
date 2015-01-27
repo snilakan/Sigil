@@ -19,9 +19,11 @@ EXTRA_DIST = \
 	notpower2-hwpref.vgtest notpower2-hwpref.stderr.exp \
 	notpower2-use.vgtest notpower2-use.stderr.exp \
 	threads.vgtest threads.stderr.exp \
-	threads-use.vgtest threads-use.stderr.exp
+	threads-use.vgtest threads-use.stderr.exp \
+	sigilTest1.vgtest sigilTest1.stderr.exp \
+	sigilTest2.vgtest sigilTest2.stdout.exp sigilTest2.stderr.exp
 
-check_PROGRAMS = clreq simwork threads
+check_PROGRAMS = clreq simwork threads sigilTest1
 
 AM_CFLAGS   += $(AM_FLAG_M3264_PRI)
 AM_CXXFLAGS += $(AM_FLAG_M3264_PRI)

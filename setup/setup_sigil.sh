@@ -41,8 +41,8 @@ echo "$lineheader Modifying Sigil postprocessing paths"
 postprocessing_path="$sigil_path/postprocessing/aggregate_costs_gran.py"
 oldvalgrind="valgrind-3.7"
 
-callgrind_annotate_old="/archgroup/archtools/Profilers/$oldvalgrind""_original/"
-callgrind_annotate_new="$sigil_path/$valgrind/"
+callgrind_annotate_old="callgrind/callgrind_annotate"
+callgrind_annotate_new="$sigil_path/$valgrind/$callgrind_annotate_old"
 
 sed -i "s|$callgrind_annotate_old|$callgrind_annotate_new|" $postprocessing_path
 
