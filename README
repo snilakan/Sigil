@@ -39,6 +39,9 @@ not need any source code changes or any prior knowledge of the application.
 For a better grasp on Sigil, please read the Valgrind, Cachegrind,
 and Callgrind overviews.
 
+If our tool is valuable to your research, please cite our Sigil paper:
+http://ieeexplore.ieee.org/xpl/articleDetails.jsp?reload=true&arnumber=6704685
+
 Additionally please see our 'docs' folder for more information.
 
 
